@@ -9,18 +9,13 @@ use razer_device::RazerDevice;
 use razer_keyboard::RazerKeyboardKind;
 use std::error::Error;
 
+#[derive(Default)]
 pub struct FoundRazerDevices {
     pub keyboards: Vec<RazerDevice<RazerKeyboardKind>>,
 }
 
-impl Default for FoundRazerDevices {
-    fn default() -> Self {
-        FoundRazerDevices { keyboards: vec![] }
-    }
-}
-
 pub fn scan_for_devices() -> Result<FoundRazerDevices, Box<dyn Error>> {
-    let devices = FoundRazerDevices::default();
+    let mut devices = FoundRazerDevices::default();
     let api = HidApi::new()?;
     for device in api.device_list() {
         if device.vendor_id() == razer_device::RAZER_VENDOR_ID {
@@ -55,15 +50,26 @@ pub fn scan_for_devices() -> Result<FoundRazerDevices, Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::scan_for_devices;
+    use crate::{razer_report::RazerLed, scan_for_devices};
 
     #[test]
     fn it_works() {
         let devices = scan_for_devices().unwrap();
-        assert_eq!(devices.len(), 1);
-        let keyboard = devices.get(0).unwrap();
+        assert_eq!(devices.keyboards.len(), 1);
+        let keyboard = devices.keyboards.get(0).unwrap();
         let version = keyboard.get_firmware_version().unwrap();
         println!("{}", version);
         assert_eq!("v2.1", version.to_string());
+        println!(
+            "brightness {}",
+            keyboard.get_led_brightness(RazerLed::Logo).unwrap()
+        );
+
+        keyboard.set_led_brightness(RazerLed::Logo, 90).unwrap();
+
+        println!(
+            "brightness {}",
+            keyboard.get_led_brightness(RazerLed::Logo).unwrap()
+        );
     }
 }

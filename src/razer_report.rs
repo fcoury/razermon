@@ -170,8 +170,12 @@ impl RazerReport {
         if response_data_size > 80 {
             return Err(RazerReportError::FailedToParse);
         }
-        let RazerCommandParts(command_class, command_id, _read_data_size) =
+
+        let RazerCommandParts(command_class, command_id, read_data_size) =
             self.command.get_associated();
+        if response_data_size != *read_data_size {
+            return Err(RazerReportError::MismatchResponse("wrong size packet"));
+        }
         if response.get_u8() != *command_class as u8 {
             return Err(RazerReportError::MismatchResponse("command class"));
         }
@@ -202,4 +206,31 @@ impl RazerReport {
         thread::yield_now();
         self.receive_packet(hid_device)
     }
+}
+
+#[repr(u8)]
+#[derive(FromRepr, Display, Debug, Clone, Copy)]
+pub enum RazerLed {
+    Zero = 0x00,
+    ScrollWheel = 0x01,
+    Battery = 0x03,
+    Logo = 0x04,
+    Backlight = 0x05,
+    Macro = 0x07,
+    Game = 0x08,
+    RedProfile = 0x0C,
+    GreenProfile = 0x0D,
+    BlueProfile = 0x0E,
+    RightSide = 0x10,
+    LeftSide = 0x11,
+    Charging = 0x20,
+    FastCharging = 0x21,
+    FullyCharging = 0x22,
+}
+
+#[repr(u8)]
+#[derive(FromRepr, Display, Debug, Clone, Copy)]
+pub enum RazerStorage {
+    NoStore = 0x00,
+    VarStore = 0x01,
 }
