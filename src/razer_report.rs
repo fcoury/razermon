@@ -1,11 +1,13 @@
-use std::error::Error;
+use std::thread;
 
 use associated::Associated;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use hidapi::{HidDevice, HidError};
 use strum::{Display, FromRepr};
+use thiserror::Error;
+
 #[repr(u8)]
-#[derive(FromRepr, Debug, Clone, Copy)]
+#[derive(FromRepr, Display, Debug, Clone, Copy)]
 pub enum RazerStatus {
     NewCommand = 0,
     CommandBusy = 1,
@@ -71,21 +73,17 @@ pub enum RazerCommand {
     StandardMatrixCustomFrame,
 }
 
-#[derive(Display, Debug)]
+#[derive(Error, Debug)]
 pub enum RazerReportError {
+    #[error("response data did not have expected value in field {0}. Likely a response to the wrong request")]
     MismatchResponse(&'static str),
+    #[error("response from hardware is an error {0}")]
     BadStatus(RazerStatus),
+    #[error("response contained invalid data layout")]
     FailedToParse,
-    HidError(HidError),
+    #[error("an error occured at the HID level")]
+    HidError(#[from] HidError),
 }
-
-impl Error for RazerReportError {}
-
-// impl fmt::Display for RazerReportError<'_> {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "razer error: {}", self.0)
-//     }
-// }
 
 pub struct RazerReport {
     report_id: u8,
@@ -185,17 +183,14 @@ impl RazerReport {
 
     pub fn send_packet(&self, hid_device: &HidDevice) -> Result<(), RazerReportError> {
         let sent_packet = self.create_payload();
-        hid_device
-            .send_feature_report(sent_packet.as_ref())
-            .map_err(RazerReportError::HidError)
+        hid_device.send_feature_report(sent_packet.as_ref())?;
+        Ok(())
     }
 
     pub fn receive_packet(&self, hid_device: &HidDevice) -> Result<Bytes, RazerReportError> {
         let mut buf = [0u8; 91];
         buf[0] = self.report_id;
-        hid_device
-            .get_feature_report(&mut buf)
-            .map_err(RazerReportError::HidError)?;
+        hid_device.get_feature_report(&mut buf)?;
         self.verify_response(&buf)
     }
 
@@ -204,6 +199,7 @@ impl RazerReport {
         hid_device: &HidDevice,
     ) -> Result<Bytes, RazerReportError> {
         self.send_packet(hid_device)?;
+        thread::yield_now();
         self.receive_packet(hid_device)
     }
 }
