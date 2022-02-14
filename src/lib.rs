@@ -1,20 +1,30 @@
 extern crate hidapi;
 pub mod razer_device;
+pub mod razer_keyboard;
 pub mod razer_report;
 
 use associated::Associated;
 use hidapi::HidApi;
-use razer_device::{RazerDevice, RazerDeviceKind};
+use razer_device::RazerDevice;
+use razer_keyboard::RazerKeyboardKind;
 use std::error::Error;
 
-pub fn scan_for_devices() -> Result<Vec<RazerDevice>, Box<dyn Error>> {
-    let mut devices = Vec::new();
+pub struct FoundRazerDevices {
+    pub keyboards: Vec<RazerDevice<RazerKeyboardKind>>,
+}
+
+impl Default for FoundRazerDevices {
+    fn default() -> Self {
+        FoundRazerDevices { keyboards: vec![] }
+    }
+}
+
+pub fn scan_for_devices() -> Result<FoundRazerDevices, Box<dyn Error>> {
+    let devices = FoundRazerDevices::default();
     let api = HidApi::new()?;
     for device in api.device_list() {
         if device.vendor_id() == razer_device::RAZER_VENDOR_ID {
-            if let Some(valid_device) =
-                razer_device::RazerKeyboardKind::from_repr(device.product_id())
-            {
+            if let Some(valid_device) = RazerKeyboardKind::from_repr(device.product_id()) {
                 let connect_info = valid_device.get_associated();
                 if (connect_info.interface_number == None
                     || connect_info.interface_number == Some(device.interface_number()))
@@ -32,10 +42,9 @@ pub fn scan_for_devices() -> Result<Vec<RazerDevice>, Box<dyn Error>> {
                         device.path().to_string_lossy(),
                     );
                     if let Ok(hid_device) = device.open_device(&api) {
-                        devices.push(RazerDevice::new(
-                            RazerDeviceKind::Keyboard(valid_device),
-                            hid_device,
-                        ));
+                        devices
+                            .keyboards
+                            .push(RazerDevice::new(valid_device, hid_device));
                     }
                 }
             }
@@ -57,12 +66,4 @@ mod tests {
         println!("{}", version);
         assert_eq!("v2.1", version.to_string());
     }
-    // #[test]
-    // fn direct_connect() {
-    //     let keyboard = connect_to_device(crate::RazerDeviceKind::Keyboard(
-    //         crate::razer_device::RazerKeyboardKind::RazerBlackwidowStealth,
-    //     ))
-    //     .unwrap();
-    //     assert_eq!("v2.1", keyboard.get_firmware_version().unwrap());
-    // }
 }
