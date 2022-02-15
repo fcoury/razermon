@@ -31,10 +31,14 @@ pub fn scan_for_devices() -> Result<FoundRazerDevices, Box<dyn Error>> {
                         Some(x) => x.to_string(),
                         None => valid_device.to_string(),
                     };
+                    let serial = device.serial_number().map(|x| x.to_string());
                     if let Ok(hid_device) = device.open_device(&api) {
-                        devices
-                            .keyboards
-                            .push(RazerDevice::new(valid_device, name, hid_device));
+                        devices.keyboards.push(RazerDevice::new(
+                            valid_device,
+                            name,
+                            serial,
+                            hid_device,
+                        ));
                     }
                 }
             }
@@ -61,5 +65,17 @@ mod tests {
         let brightness = keyboard.get_brightness().unwrap();
         println!("brightness {}", brightness);
         assert_eq!(90, brightness);
+        println!("serial {}", keyboard.get_serial().unwrap())
+    }
+    #[test]
+    fn test_setting_factory_mode() {
+        let devices = scan_for_devices().unwrap();
+        assert_eq!(devices.keyboards.len(), 1);
+        let keyboard = devices.keyboards.get(0).unwrap();
+        keyboard
+            .set_device_mode(crate::razer_device::DeviceMode::FactoryTesting)
+            .unwrap();
+        let mode = keyboard.get_device_mode().unwrap();
+        assert_eq!(crate::razer_device::DeviceMode::FactoryTesting, mode);
     }
 }

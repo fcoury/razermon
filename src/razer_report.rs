@@ -84,8 +84,8 @@ pub enum RazerReportError {
     MismatchResponse(&'static str),
     #[error("response from hardware is an error {0}")]
     BadStatus(RazerStatus),
-    #[error("response contained invalid data layout")]
-    FailedToParse,
+    #[error("response contained invalid data layout {0}")]
+    FailedToParse(String),
     #[error("an error occured at the HID level")]
     HidError(#[from] HidError),
 }
@@ -154,7 +154,11 @@ impl RazerReport {
         }
         let status = RazerStatus::from_repr(response.get_u8());
         match status {
-            None => return Err(RazerReportError::FailedToParse),
+            None => {
+                return Err(RazerReportError::FailedToParse(
+                    "invalid status".to_string(),
+                ))
+            }
             Some(real_status) => match real_status {
                 RazerStatus::CommandSuccessful => (),
                 _ => return Err(RazerReportError::BadStatus(real_status)),
@@ -167,7 +171,9 @@ impl RazerReport {
         response.advance(1);
         let response_data_size = response.get_u8();
         if response_data_size > 80 {
-            return Err(RazerReportError::FailedToParse);
+            return Err(RazerReportError::FailedToParse(
+                "invalid data size".to_string(),
+            ));
         }
 
         let RazerCommandParts(command_class, command_id, read_data_size) =
