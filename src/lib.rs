@@ -50,7 +50,7 @@ pub fn scan_for_devices() -> Result<FoundRazerDevices, Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{razer_report::RazerLed, scan_for_devices};
+    use crate::scan_for_devices;
 
     #[test]
     fn it_works() {
@@ -60,16 +60,11 @@ mod tests {
         let version = keyboard.get_firmware_version().unwrap();
         println!("{}", version);
         assert_eq!("v2.1", version.to_string());
-        println!(
-            "brightness {}",
-            keyboard.get_led_brightness(RazerLed::Logo).unwrap()
-        );
+        println!("brightness {}", keyboard.get_brightness().unwrap());
 
-        keyboard.set_led_brightness(RazerLed::Logo, 90).unwrap();
-
-        println!(
-            "brightness {}",
-            keyboard.get_led_brightness(RazerLed::Logo).unwrap()
-        );
+        keyboard.set_brightness(90).unwrap();
+        let brightness = keyboard.get_brightness().unwrap();
+        println!("brightness {}", brightness);
+        assert_eq!(90, brightness);
     }
 }

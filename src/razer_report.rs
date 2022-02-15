@@ -37,6 +37,7 @@ pub enum RazerCommandClass {
     ExtendedMatrix = 0x0F,
     ExtendedMatrixMouse = 0x0D,
     Misc = 0x07,
+    Blade = 0x0E,
 }
 #[repr(u8)]
 #[derive(Clone, Copy)]
@@ -71,6 +72,10 @@ pub enum RazerCommand {
     StandardMatrixEffect,
     #[assoc_const(RazerCommandParts(RazerCommandClass::StandardLED, 0x0B, 70))]
     StandardMatrixCustomFrame,
+    #[assoc_const(RazerCommandParts(RazerCommandClass::ExtendedMatrix, 0x04, 3))]
+    ExtendedMatrixBrightness,
+    #[assoc_const(RazerCommandParts(RazerCommandClass::Blade, 0x04, 2))]
+    BladeBrightness,
 }
 
 #[derive(Error, Debug)]
@@ -96,19 +101,13 @@ pub struct RazerReport {
 }
 
 impl RazerReport {
-    pub fn new<TOptionalTransaction>(
+    pub fn new(
         command_direction: RazerCommandDirection,
         command: RazerCommand,
         body: Bytes,
-        optional_transaction_device: TOptionalTransaction,
-    ) -> Self
-    where
-        TOptionalTransaction: Into<Option<RazerTransactionDevice>>,
-    {
+        transaction_device: RazerTransactionDevice,
+    ) -> Self {
         let report_id = 0u8;
-        let transaction_device = optional_transaction_device
-            .into()
-            .unwrap_or(RazerTransactionDevice::Default);
 
         RazerReport {
             report_id,

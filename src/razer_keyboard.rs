@@ -1,6 +1,11 @@
-use crate::razer_device::{RazerDevice, RazerDeviceConnectInfo, RazerDeviceKind};
+use crate::{
+    razer_device::{RazerDevice, RazerDeviceConnectInfo, RazerDeviceKind},
+    razer_report::*,
+};
 use associated::Associated;
+use bytes::Buf;
 use strum::FromRepr;
+use RazerKeyboardKind::*;
 
 #[derive(Associated, FromRepr, Debug, PartialEq, Clone, Copy)]
 #[repr(u16)]
@@ -166,44 +171,151 @@ pub enum RazerKeyboardKind {
 
 impl RazerKeyboardKind {
     pub fn is_blade(&self) -> bool {
-        use RazerKeyboardKind::*;
-        match self {
+        matches!(
+            self,
             BladeStealth
-            | BladeStealthLate2016
-            | BladeProLate2016
-            | Blade2018
-            | Blade2018Mercury
-            | Blade2018Base
-            | Blade2019Adv
-            | BladeMid2019Mercury
-            | BladeStudioEdition2019
-            | BladeQhd
-            | BladeLate2016
-            | BladeStealthMid2017
-            | BladeStealthLate2017
-            | BladeStealth2019
-            | BladePro2017
-            | BladePro2017Fullhd
-            | Blade2019Base
-            | BladeStealthLate2019
-            | BladePro2019
-            | BladeProLate2019
-            | BladeStealthEarly2020
-            | BladeStealthLate2020
-            | BladeProEarly2020
-            | Book2020
-            | Blade15Adv2020
-            | BladeEarly2020Base
-            | Blade15AdvEarly2021
-            | Blade15AdvMid2021
-            | Blade15BaseEarly2021
-            | Blade17ProMid2021
-            | Blade142021 => true,
-            _ => false,
+                | BladeStealthLate2016
+                | BladeProLate2016
+                | Blade2018
+                | Blade2018Mercury
+                | Blade2018Base
+                | Blade2019Adv
+                | BladeMid2019Mercury
+                | BladeStudioEdition2019
+                | BladeQhd
+                | BladeLate2016
+                | BladeStealthMid2017
+                | BladeStealthLate2017
+                | BladeStealth2019
+                | BladePro2017
+                | BladePro2017Fullhd
+                | Blade2019Base
+                | BladeStealthLate2019
+                | BladePro2019
+                | BladeProLate2019
+                | BladeStealthEarly2020
+                | BladeStealthLate2020
+                | BladeProEarly2020
+                | Book2020
+                | Blade15Adv2020
+                | BladeEarly2020Base
+                | Blade15AdvEarly2021
+                | Blade15AdvMid2021
+                | Blade15BaseEarly2021
+                | Blade17ProMid2021
+                | Blade142021
+        )
+    }
+    pub fn is_logo_only(&self) -> bool {
+        matches!(
+            self,
+            BlackwidowStealth
+                | BlackwidowStealthEdition
+                | BlackwidowUltimate2012
+                | BlackwidowUltimate2013
+                | BlackwidowTe2014
+        )
+    }
+    pub fn is_extended_matrix(&self) -> bool {
+        matches!(
+            self,
+            TartarusV2
+                | Ornata
+                | OrnataChroma
+                | HuntsmanElite
+                | HuntsmanTe
+                | HuntsmanMini
+                | HuntsmanMiniJp
+                | Blackwidow2019
+                | Huntsman
+                | BlackwidowEssential
+                | CynosaChroma
+                | CynosaChromaPro
+                | CynosaLite
+                | BlackwidowV3
+                | BlackwidowV3Tk
+                | BlackwidowV3ProWired
+                | BlackwidowElite
+                | CynosaV2
+                | OrnataV2
+                | HuntsmanV2Analog
+                | BlackwidowV3Mini
+                | BlackwidowV3MiniWireless
+        )
+    }
+}
+
+impl RazerDeviceKind for RazerKeyboardKind {
+    fn get_transaction_device(&self) -> RazerTransactionDevice {
+        match self {
+            TartarusV2 | BlackwidowElite | CynosaV2 | OrnataV2 | HuntsmanV2Analog
+            | BlackwidowV3Mini => RazerTransactionDevice::Zero,
+            BlackwidowV3MiniWireless => RazerTransactionDevice::Four,
+            _ => RazerTransactionDevice::Default,
         }
     }
 }
 
-impl RazerDeviceKind for RazerKeyboardKind {}
-
-impl RazerDevice<RazerKeyboardKind> {}
+impl RazerDevice<RazerKeyboardKind> {
+    pub fn set_brightness(&self, percent: u8) -> Result<(), RazerReportError> {
+        match self.kind {
+            TartarusV2 => self.set_extended_matrix_brightness(
+                RazerStorage::VarStore,
+                RazerLed::Zero,
+                percent,
+            )?,
+            k if k.is_logo_only() => {
+                self.set_led_brightness(RazerStorage::VarStore, RazerLed::Logo, percent)?
+            }
+            k if k.is_extended_matrix() => self.set_extended_matrix_brightness(
+                RazerStorage::VarStore,
+                RazerLed::Backlight,
+                percent,
+            )?,
+            k if k.is_blade() => self.set_blade_brightness(percent)?,
+            _ => {
+                self.set_led_brightness(RazerStorage::VarStore, RazerLed::Backlight, percent)?;
+            }
+        }
+        Ok(())
+    }
+    pub fn get_brightness(&self) -> Result<u8, RazerReportError> {
+        match self.kind {
+            TartarusV2 => {
+                self.get_extended_matrix_brightness(RazerStorage::VarStore, RazerLed::Zero)
+            }
+            k if k.is_logo_only() => {
+                self.get_led_brightness(RazerStorage::VarStore, RazerLed::Logo)
+            }
+            k if k.is_extended_matrix() => {
+                self.get_extended_matrix_brightness(RazerStorage::VarStore, RazerLed::Backlight)
+            }
+            k if k.is_blade() => self.get_blade_brightness(),
+            _ => self.get_led_brightness(RazerStorage::VarStore, RazerLed::Backlight),
+        }
+    }
+    pub fn set_blade_brightness(&self, percent: u8) -> Result<(), RazerReportError> {
+        if percent > 100 {
+            panic!("cannot set brightness to more than 100");
+        }
+        let report = RazerReport::new(
+            RazerCommandDirection::HostToDevice,
+            RazerCommand::BladeBrightness,
+            vec![1u8, percent].into(),
+            self.kind.get_transaction_device(),
+        );
+        report.send_packet(&self.hid_device)?;
+        Ok(())
+    }
+    pub fn get_blade_brightness(&self) -> Result<u8, RazerReportError> {
+        let report = RazerReport::new(
+            RazerCommandDirection::DeviceToHost,
+            RazerCommand::BladeBrightness,
+            vec![1u8].into(),
+            self.kind.get_transaction_device(),
+        );
+        let mut response = report.send_and_receive_packet(&self.hid_device)?;
+        response.advance(1);
+        Ok(response.get_u8())
+    }
+}

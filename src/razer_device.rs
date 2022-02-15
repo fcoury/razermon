@@ -1,6 +1,4 @@
-use crate::razer_report::{
-    RazerCommand, RazerCommandDirection, RazerLed, RazerReport, RazerReportError, RazerStorage,
-};
+use crate::razer_report::*;
 use bytes::{Buf, Bytes};
 use hidapi::HidDevice;
 use std::fmt::Display;
@@ -14,14 +12,16 @@ pub struct RazerDeviceConnectInfo {
     pub usage_page: Option<u16>,
 }
 
-pub trait RazerDeviceKind {}
+pub trait RazerDeviceKind {
+    fn get_transaction_device(&self) -> RazerTransactionDevice;
+}
 
 pub struct RazerDevice<T>
 where
     T: RazerDeviceKind,
 {
-    kind: T,
-    hid_device: HidDevice,
+    pub kind: T,
+    pub(crate) hid_device: HidDevice,
 }
 
 pub struct RazerFirmwareVersion(u8, u8);
@@ -45,7 +45,7 @@ where
             RazerCommandDirection::DeviceToHost,
             RazerCommand::FirmwareVersion,
             Bytes::new(),
-            None,
+            self.kind.get_transaction_device(),
         );
         let response_payload = report.send_and_receive_packet(&self.hid_device)?;
         Ok(RazerFirmwareVersion(
@@ -54,26 +54,70 @@ where
         ))
     }
 
-    pub fn set_led_brightness(&self, led: RazerLed, percent: u8) -> Result<(), RazerReportError> {
+    pub fn set_led_brightness(
+        &self,
+        store: RazerStorage,
+        led: RazerLed,
+        percent: u8,
+    ) -> Result<(), RazerReportError> {
         if percent > 100 {
-            panic!("cannot set brightness to more than 100")
+            panic!("cannot set brightness to more than 100");
         }
         let report = RazerReport::new(
             RazerCommandDirection::HostToDevice,
             RazerCommand::LedBrightness,
-            vec![RazerStorage::VarStore as u8, led as u8, percent].into(),
-            None,
+            vec![store as u8, led as u8, percent].into(),
+            self.kind.get_transaction_device(),
         );
         report.send_packet(&self.hid_device)?;
         Ok(())
     }
 
-    pub fn get_led_brightness(&self, led: RazerLed) -> Result<u8, RazerReportError> {
+    pub fn get_led_brightness(
+        &self,
+        store: RazerStorage,
+        led: RazerLed,
+    ) -> Result<u8, RazerReportError> {
         let report = RazerReport::new(
             RazerCommandDirection::DeviceToHost,
             RazerCommand::LedBrightness,
-            vec![RazerStorage::VarStore as u8, led as u8].into(),
-            None,
+            vec![store as u8, led as u8].into(),
+            self.kind.get_transaction_device(),
+        );
+        let mut response = report.send_and_receive_packet(&self.hid_device)?;
+        response.advance(2);
+        Ok(response.get_u8())
+    }
+
+    pub fn set_extended_matrix_brightness(
+        &self,
+        store: RazerStorage,
+        led: RazerLed,
+        percent: u8,
+    ) -> Result<(), RazerReportError> {
+        if percent > 100 {
+            panic!("cannot set brightness to more than 100");
+        }
+        let report = RazerReport::new(
+            RazerCommandDirection::HostToDevice,
+            RazerCommand::ExtendedMatrixBrightness,
+            vec![store as u8, led as u8, percent].into(),
+            self.kind.get_transaction_device(),
+        );
+        report.send_packet(&self.hid_device)?;
+        Ok(())
+    }
+
+    pub fn get_extended_matrix_brightness(
+        &self,
+        store: RazerStorage,
+        led: RazerLed,
+    ) -> Result<u8, RazerReportError> {
+        let report = RazerReport::new(
+            RazerCommandDirection::DeviceToHost,
+            RazerCommand::ExtendedMatrixBrightness,
+            vec![store as u8, led as u8].into(),
+            self.kind.get_transaction_device(),
         );
         let mut response = report.send_and_receive_packet(&self.hid_device)?;
         response.advance(2);
