@@ -21,6 +21,7 @@ where
     T: RazerDeviceKind,
 {
     pub kind: T,
+    pub name: String,
     pub(crate) hid_device: HidDevice,
 }
 
@@ -36,8 +37,12 @@ impl<T> RazerDevice<T>
 where
     T: RazerDeviceKind,
 {
-    pub fn new(kind: T, hid_device: HidDevice) -> Self {
-        RazerDevice { kind, hid_device }
+    pub fn new(kind: T, name: String, hid_device: HidDevice) -> Self {
+        RazerDevice {
+            kind,
+            name,
+            hid_device,
+        }
     }
 
     pub fn get_firmware_version(&self) -> Result<RazerFirmwareVersion, RazerReportError> {

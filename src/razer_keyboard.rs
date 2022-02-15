@@ -4,10 +4,10 @@ use crate::{
 };
 use associated::Associated;
 use bytes::Buf;
-use strum::FromRepr;
+use strum::{Display, FromRepr};
 use RazerKeyboardKind::*;
 
-#[derive(Associated, FromRepr, Debug, PartialEq, Clone, Copy)]
+#[derive(Associated, FromRepr, Debug, Display, PartialEq, Clone, Copy)]
 #[repr(u16)]
 #[associated(Type = RazerDeviceConnectInfo)]
 pub enum RazerKeyboardKind {

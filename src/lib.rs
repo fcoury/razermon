@@ -27,19 +27,14 @@ pub fn scan_for_devices() -> Result<FoundRazerDevices, Box<dyn Error>> {
                     && (connect_info.usage_page == None
                         || connect_info.usage_page == Some(device.usage_page()))
                 {
-                    println!(
-                        "found {:?}, {:#04x}, {}, {}, {}, {}",
-                        device.serial_number(),
-                        device.product_id(),
-                        device.interface_number(),
-                        device.usage(),
-                        device.usage_page(),
-                        device.path().to_string_lossy(),
-                    );
+                    let name = match device.product_string() {
+                        Some(x) => x.to_string(),
+                        None => valid_device.to_string(),
+                    };
                     if let Ok(hid_device) = device.open_device(&api) {
                         devices
                             .keyboards
-                            .push(RazerDevice::new(valid_device, hid_device));
+                            .push(RazerDevice::new(valid_device, name, hid_device));
                     }
                 }
             }
