@@ -8,6 +8,9 @@ license = "LGPL-3.0-only"
 keywords = ["razer", "hid"]
 categories = ["hardware-support"]
 repository = "https://github.com/EchelonFour/razer_driver_rs"
+exclude = [
+    ".github/*",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
