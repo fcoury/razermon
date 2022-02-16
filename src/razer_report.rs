@@ -2,20 +2,30 @@ use std::thread;
 
 use associated::Associated;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use hidapi::{HidDevice, HidError};
+use hidapi::HidDevice;
 use strum::{Display, FromRepr};
-use thiserror::Error;
 
+use crate::RazerError;
+
+/// Different status codes that can be sent in the razer report
 #[repr(u8)]
 #[derive(FromRepr, Display, Debug, Clone, Copy)]
 pub enum RazerStatus {
+    /// Used to send commands to the device
     NewCommand = 0,
+    /// The device is too busy to respond
     CommandBusy = 1,
+    /// The command returned correctly
     CommandSuccessful = 2,
+    /// The command failed to run
     CommandFailure = 3,
+    /// The command timed out
     CommandNoResponseOrTimeout = 4,
+    /// The command is not supported by this device
     CommandNotSupport = 5,
 }
+
+/// Some magic that some devices need to be different. What each value means is still unsure.
 #[repr(u8)]
 #[derive(Clone, Copy)]
 pub enum RazerTransactionDevice {
@@ -24,14 +34,18 @@ pub enum RazerTransactionDevice {
     One = 0x20,
     Four = 0x80,
 }
+
+/// Some magic that all devices send the same magic for.
 #[repr(u8)]
 #[derive(Clone, Copy)]
-pub enum RazerTransactionId {
+pub(crate) enum RazerTransactionId {
     Default = 0x1F,
 }
+
+/// Different groups of commands that can be sent to the keyboard
 #[repr(u8)]
 #[derive(Clone, Copy)]
-pub enum RazerCommandClass {
+pub(crate) enum RazerCommandClass {
     StandardDevice = 0x00,
     StandardLED = 0x03,
     ExtendedMatrix = 0x0F,
@@ -39,19 +53,25 @@ pub enum RazerCommandClass {
     Misc = 0x07,
     Blade = 0x0E,
 }
+
+/// The direction of the command being sent.
 #[repr(u8)]
 #[derive(Clone, Copy)]
-pub enum RazerCommandDirection {
+pub(crate) enum RazerCommandDirection {
+    /// Used to set settings on the device
     HostToDevice = 0x00,
+    /// Used to get settings on the device
     DeviceToHost = 0x80,
 }
 
+/// Special magic for any given command
 #[derive(Clone, Copy)]
-pub struct RazerCommandParts(RazerCommandClass, u8, u8);
+pub(crate) struct RazerCommandParts(RazerCommandClass, u8, u8);
 
+/// Every kind of command that be sent in a command
 #[derive(Associated)]
 #[associated(Type = RazerCommandParts)]
-pub enum RazerCommand {
+pub(crate) enum RazerCommand {
     #[assoc_const(RazerCommandParts(RazerCommandClass::StandardDevice, 0x04, 2))]
     DeviceMode,
     #[assoc_const(RazerCommandParts(RazerCommandClass::StandardDevice, 0x02, 22))]
@@ -78,19 +98,7 @@ pub enum RazerCommand {
     BladeBrightness,
 }
 
-#[derive(Error, Debug)]
-pub enum RazerReportError {
-    #[error("response data did not have expected value in field {0}. Likely a response to the wrong request")]
-    MismatchResponse(&'static str),
-    #[error("response from hardware is an error {0}")]
-    BadStatus(RazerStatus),
-    #[error("response contained invalid data layout {0}")]
-    FailedToParse(String),
-    #[error("an error occured at the HID level")]
-    HidError(#[from] HidError),
-}
-
-pub struct RazerReport {
+pub(crate) struct RazerReport {
     report_id: u8,
     status: RazerStatus,
     transaction_device: RazerTransactionDevice,
@@ -147,72 +155,64 @@ impl RazerReport {
         buf.freeze()
     }
 
-    fn verify_response(&self, response_buffer: &[u8]) -> Result<Bytes, RazerReportError> {
+    fn verify_response(&self, response_buffer: &[u8]) -> Result<Bytes, RazerError> {
         let mut response = Bytes::copy_from_slice(response_buffer);
         if response.get_u8() != self.report_id {
-            return Err(RazerReportError::MismatchResponse("report id"));
+            return Err(RazerError::MismatchResponse("report id"));
         }
         let status = RazerStatus::from_repr(response.get_u8());
         match status {
-            None => {
-                return Err(RazerReportError::FailedToParse(
-                    "invalid status".to_string(),
-                ))
-            }
+            None => return Err(RazerError::FailedToParse("invalid status".to_string())),
             Some(real_status) => match real_status {
                 RazerStatus::CommandSuccessful => (),
-                _ => return Err(RazerReportError::BadStatus(real_status)),
+                _ => return Err(RazerError::BadStatus(real_status)),
             },
         };
         response.advance(1);
         if response.get_u16() != self.remaining_packets {
-            return Err(RazerReportError::MismatchResponse("remaining packets"));
+            return Err(RazerError::MismatchResponse("remaining packets"));
         }
         response.advance(1);
         let response_data_size = response.get_u8();
         if response_data_size > 80 {
-            return Err(RazerReportError::FailedToParse(
-                "invalid data size".to_string(),
-            ));
+            return Err(RazerError::FailedToParse("invalid data size".to_string()));
         }
 
         let RazerCommandParts(command_class, command_id, read_data_size) =
             self.command.get_associated();
         if response_data_size != *read_data_size {
-            return Err(RazerReportError::MismatchResponse("wrong size packet"));
+            return Err(RazerError::MismatchResponse("wrong size packet"));
         }
         if response.get_u8() != *command_class as u8 {
-            return Err(RazerReportError::MismatchResponse("command class"));
+            return Err(RazerError::MismatchResponse("command class"));
         }
         if response.get_u8() != command_id | self.command_direction as u8 {
-            return Err(RazerReportError::MismatchResponse("command id"));
+            return Err(RazerError::MismatchResponse("command id"));
         }
         Ok(response.copy_to_bytes(response_data_size.into()))
     }
 
-    pub fn send_packet(&self, hid_device: &HidDevice) -> Result<(), RazerReportError> {
+    pub fn send_packet(&self, hid_device: &HidDevice) -> Result<(), RazerError> {
         let sent_packet = self.create_payload();
         hid_device.send_feature_report(sent_packet.as_ref())?;
         Ok(())
     }
 
-    pub fn receive_packet(&self, hid_device: &HidDevice) -> Result<Bytes, RazerReportError> {
+    pub fn receive_packet(&self, hid_device: &HidDevice) -> Result<Bytes, RazerError> {
         let mut buf = [0u8; 91];
         buf[0] = self.report_id;
         hid_device.get_feature_report(&mut buf)?;
         self.verify_response(&buf)
     }
 
-    pub fn send_and_receive_packet(
-        &self,
-        hid_device: &HidDevice,
-    ) -> Result<Bytes, RazerReportError> {
+    pub fn send_and_receive_packet(&self, hid_device: &HidDevice) -> Result<Bytes, RazerError> {
         self.send_packet(hid_device)?;
         thread::yield_now();
         self.receive_packet(hid_device)
     }
 }
 
+/// Every kind of LED on razer devices
 #[repr(u8)]
 #[derive(FromRepr, Display, Debug, Clone, Copy)]
 pub enum RazerLed {
@@ -233,9 +233,14 @@ pub enum RazerLed {
     FullyCharging = 0x22,
 }
 
+/// Tells the device if it should remember the command, or just set it temporarily.
+///
+/// Not all devices support saving, and also saving too often can wear down memory.
 #[repr(u8)]
 #[derive(FromRepr, Display, Debug, Clone, Copy)]
 pub enum RazerStorage {
+    /// Only set value temporarily
     NoStore = 0x00,
+    /// Save setting to survive restart
     VarStore = 0x01,
 }

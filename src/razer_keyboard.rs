@@ -1,12 +1,15 @@
 use crate::{
     razer_device::{RazerDevice, RazerDeviceConnectInfo, RazerDeviceKind},
     razer_report::*,
+    RazerError,
 };
 use associated::Associated;
 use bytes::Buf;
 use strum::{Display, FromRepr};
 use RazerKeyboardKind::*;
 
+/// Every kind of keyboard that this library can talk to.
+/// Has an associated type that has information on how to connect to the device.
 #[derive(Associated, FromRepr, Debug, Display, PartialEq, Clone, Copy)]
 #[repr(u16)]
 #[associated(Type = RazerDeviceConnectInfo)]
@@ -170,6 +173,7 @@ pub enum RazerKeyboardKind {
 }
 
 impl RazerKeyboardKind {
+    /// Returns true if the device a blade laptop
     pub fn is_blade(&self) -> bool {
         matches!(
             self,
@@ -206,6 +210,7 @@ impl RazerKeyboardKind {
                 | Blade142021
         )
     }
+    /// Returns true is the keyboard only has a logo LED for programing
     pub fn is_logo_only(&self) -> bool {
         matches!(
             self,
@@ -216,6 +221,7 @@ impl RazerKeyboardKind {
                 | BlackwidowTe2014
         )
     }
+    /// Returns true if keyboard supports extended matrix LEDs
     pub fn is_extended_matrix(&self) -> bool {
         matches!(
             self,
@@ -257,29 +263,28 @@ impl RazerDeviceKind for RazerKeyboardKind {
 }
 
 impl RazerDevice<RazerKeyboardKind> {
-    pub fn set_brightness(&self, percent: u8) -> Result<(), RazerReportError> {
+    /// Sets the brightness of the keyboard.
+    /// Will use a different method, depending on what features the keyboard has.
+    pub fn set_brightness(&self, percent: u8) -> Result<(), RazerError> {
         match self.kind {
-            TartarusV2 => self.set_extended_matrix_brightness(
-                RazerStorage::VarStore,
-                RazerLed::Zero,
-                percent,
-            )?,
+            TartarusV2 => {
+                self.set_extended_matrix_brightness(RazerStorage::VarStore, RazerLed::Zero, percent)
+            }
             k if k.is_logo_only() => {
-                self.set_led_brightness(RazerStorage::VarStore, RazerLed::Logo, percent)?
+                self.set_led_brightness(RazerStorage::VarStore, RazerLed::Logo, percent)
             }
             k if k.is_extended_matrix() => self.set_extended_matrix_brightness(
                 RazerStorage::VarStore,
                 RazerLed::Backlight,
                 percent,
-            )?,
-            k if k.is_blade() => self.set_blade_brightness(percent)?,
-            _ => {
-                self.set_led_brightness(RazerStorage::VarStore, RazerLed::Backlight, percent)?;
-            }
+            ),
+            k if k.is_blade() => self.set_blade_brightness(percent),
+            _ => self.set_led_brightness(RazerStorage::VarStore, RazerLed::Backlight, percent),
         }
-        Ok(())
     }
-    pub fn get_brightness(&self) -> Result<u8, RazerReportError> {
+    /// Gets the brightness of the keyboard.
+    /// Will use a different method, depending on what features the keyboard has.
+    pub fn get_brightness(&self) -> Result<u8, RazerError> {
         match self.kind {
             TartarusV2 => {
                 self.get_extended_matrix_brightness(RazerStorage::VarStore, RazerLed::Zero)
@@ -294,7 +299,8 @@ impl RazerDevice<RazerKeyboardKind> {
             _ => self.get_led_brightness(RazerStorage::VarStore, RazerLed::Backlight),
         }
     }
-    pub fn set_blade_brightness(&self, percent: u8) -> Result<(), RazerReportError> {
+    /// Sets the brightness of the blade laptop keyboard
+    pub fn set_blade_brightness(&self, percent: u8) -> Result<(), RazerError> {
         if percent > 100 {
             panic!("cannot set brightness to more than 100");
         }
@@ -304,10 +310,10 @@ impl RazerDevice<RazerKeyboardKind> {
             vec![1u8, percent].into(),
             self.kind.get_transaction_device(),
         );
-        report.send_packet(&self.hid_device)?;
-        Ok(())
+        report.send_packet(&self.hid_device)
     }
-    pub fn get_blade_brightness(&self) -> Result<u8, RazerReportError> {
+    /// Gets the brightness of the blade laptop keyboard
+    pub fn get_blade_brightness(&self) -> Result<u8, RazerError> {
         let report = RazerReport::new(
             RazerCommandDirection::DeviceToHost,
             RazerCommand::BladeBrightness,
