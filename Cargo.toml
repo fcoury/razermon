@@ -1,9 +1,13 @@
 [package]
 name = "razer_driver_rs"
+description = "Implementation of razer device USB commands"
 version = "0.1.0"
 edition = "2021"
 readme = "README.md"
 license = "LGPL-3.0-only"
+keywords = ["razer", "hid"]
+categories = ["hardware-support"]
+repository = "https://github.com/EchelonFour/razer_driver_rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
