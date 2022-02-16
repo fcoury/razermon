@@ -8,7 +8,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libudev-dev
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev libhidapi-dev
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly

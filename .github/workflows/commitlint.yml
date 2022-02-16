@@ -2,12 +2,10 @@ name: Lint Commit Messages
 on:
   push:
     branches:
-      - master
-      - release/*
+      - main
   pull_request:
     branches:
-      - master
-      - release/*
+      - main
 
 jobs:
   commitlint:
