@@ -3,29 +3,39 @@
     windows_subsystem = "windows"
 )]
 
-use tauri::{CustomMenuItem, Manager, SystemTray, SystemTrayEvent, SystemTrayMenu};
+use razermacos::{devices::USB_DEVICE_ID_RAZER_VIPER_ULTIMATE_WIRELESS, RazerDevices};
+use tauri::{CustomMenuItem, RunEvent, SystemTray, SystemTrayEvent, SystemTrayMenu};
 
 fn main() {
-    tauri::Builder::default()
-        .system_tray(
-            SystemTray::new().with_menu(
-                SystemTrayMenu::new()
-                    .add_item(CustomMenuItem::new("no_devices", "No Devices Found"))
-                    .add_item(CustomMenuItem::new("quit", "Quit")),
-            ),
+    let mut devices = RazerDevices::all();
+    let device = devices.find(USB_DEVICE_ID_RAZER_VIPER_ULTIMATE_WIRELESS as u16);
+
+    let item = if let Some(device) = device {
+        let ch_str = if device.is_charging() { " ⚡️" } else { "" };
+        CustomMenuItem::new(
+            "battery",
+            format!("Battery: 🔋{}%{}", device.battery(), ch_str),
         )
+    } else {
+        CustomMenuItem::new("battery", "No devices found.")
+    };
+    let items = SystemTrayMenu::new().add_item(item);
+
+    #[allow(unused_mut)]
+    let mut app = tauri::Builder::default()
+        .system_tray(SystemTray::new().with_menu(items))
         .on_system_tray_event(|app, event| match event {
             SystemTrayEvent::LeftClick {
                 position: _,
                 size: _,
                 ..
             } => {
-                let window = app.get_window("main").unwrap();
-                window.show().unwrap();
-                window.set_focus().unwrap();
+                // let window = app.get_window("main").unwrap();
+                // window.show().unwrap();
+                // window.set_focus().unwrap();
             }
             SystemTrayEvent::MenuItemClick { id, .. } => {
-                let item_handle = app.tray_handle().get_item(&id);
+                let _item_handle = app.tray_handle().get_item(&id);
                 match id.as_str() {
                     "no_devices" => {
                         eprintln!("No devices clicked");
@@ -38,11 +48,17 @@ fn main() {
             }
             _ => {}
         })
-        // .invoke_handler(tauri::generate_handler![
-        //     cmd::log_operation,
-        //     cmd::perform_request,
-        //     menu_toggle,
-        // ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(move |_app_handle, e| {
+        if let RunEvent::ExitRequested { api, .. } = &e {
+            // Keep the event loop running even if all windows are closed
+            // This allow us to catch system tray events when there is no window
+            api.prevent_exit();
+        }
+        // if let Some(on_event) = &mut on_event {
+        //     (on_event)(app_handle, e);
+        // }
+    });
 }
