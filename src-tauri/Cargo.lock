@@ -2269,7 +2269,10 @@ dependencies = [
 name = "razermacos"
 version = "0.1.1"
 dependencies = [
+ "lazy_static",
  "librazermacos-sys",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
