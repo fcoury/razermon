@@ -11,35 +11,9 @@ mod database;
 mod settings;
 
 fn main() {
-    let product_id = settings::get("product_id").unwrap();
-    let product_id = match product_id {
-        Some(product_id) => Some(product_id.parse().unwrap()),
-        None => {
-            if let Some(devices) = razermacos::RazerDevices::new().all() {
-                let product_id = devices
-                    .iter()
-                    .find(|d| d.has_battery())
-                    .unwrap()
-                    .product_id();
-                settings::set("product_id", &product_id.to_string()).unwrap();
-                Some(product_id)
-            } else {
-                None
-            }
-        }
-    };
-
+    let product_id = load_product_id();
     let menu = tray_menu(product_id);
-
-    let status = if let Some(product_id) = product_id {
-        if let Some(status) = BatteryStatus::get(product_id) {
-            status.to_string()
-        } else {
-            "".to_string()
-        }
-    } else {
-        "".to_string()
-    };
+    let status = status(product_id);
 
     #[allow(unused_mut)]
     let mut app = tauri::Builder::default()
@@ -121,6 +95,40 @@ fn main() {
             api.prevent_exit();
         }
     });
+}
+
+fn status(product_id: Option<u16>) -> String {
+    let status = if let Some(product_id) = product_id {
+        if let Some(status) = BatteryStatus::get(product_id) {
+            status.to_string()
+        } else {
+            "".to_string()
+        }
+    } else {
+        "".to_string()
+    };
+    status
+}
+
+fn load_product_id() -> Option<u16> {
+    let product_id = settings::get("product_id").unwrap();
+    let product_id = match product_id {
+        Some(product_id) => Some(product_id.parse().unwrap()),
+        None => {
+            if let Some(devices) = razermacos::RazerDevices::new().all() {
+                let product_id = devices
+                    .iter()
+                    .find(|d| d.has_battery())
+                    .unwrap()
+                    .product_id();
+                settings::set("product_id", &product_id.to_string()).unwrap();
+                Some(product_id)
+            } else {
+                None
+            }
+        }
+    };
+    product_id
 }
 
 fn start_updates(handle: AppHandle, product_id: u16) {
