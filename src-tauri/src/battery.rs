@@ -54,9 +54,9 @@ impl fmt::Display for BatteryStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let icon = if self.charging {
             "⚡️"
-        } else if self.percentage > 60 {
-            "🔋"
         } else if self.percentage > 20 {
+            "🔋"
+        } else if self.percentage > 10 {
             "🪫"
         } else {
             "🔌"
