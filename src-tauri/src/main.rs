@@ -1,41 +1,83 @@
 #[cfg(any(target_os = "macos"))]
 use crate::battery::BatteryStatus;
-use razermacos::devices::USB_DEVICE_ID_RAZER_VIPER_ULTIMATE_WIRELESS;
 use std::{thread, time::Duration};
 use tauri::{
-    CustomMenuItem, Manager, RunEvent, SystemTray, SystemTrayEvent, SystemTrayMenu,
+    AppHandle, CustomMenuItem, Manager, RunEvent, SystemTray, SystemTrayEvent, SystemTrayMenu,
     SystemTrayMenuItem,
 };
 
 mod battery;
 mod database;
+mod settings;
 
-fn devices() -> Option<Vec<String>> {
-    let mut devices = razermacos::RazerDevices::new();
-    match devices.all() {
-        Some(devices) => Some(devices.iter().map(|device| device.name.clone()).collect()),
-        None => None,
+fn no_devices_menu(menu: &SystemTrayMenu) -> SystemTrayMenu {
+    let menu = menu.clone();
+    let mut item = CustomMenuItem::new("no_devices", "No devices found");
+    item.enabled = false;
+    menu.add_item(item)
+}
+
+fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
+    let mut menu = SystemTrayMenu::new();
+
+    if let Some(product_id) = product_id {
+        menu = match razermacos::RazerDevices::new().all() {
+            Some(devices) => {
+                menu = menu
+                    .add_item(CustomMenuItem::new("config", "Preferences"))
+                    .add_native_item(SystemTrayMenuItem::Separator);
+
+                for device in devices {
+                    let id = format!("device_{}", device.product_id());
+                    let mut item = CustomMenuItem::new(id, &device.name);
+                    item.selected = product_id == device.product_id();
+                    item.enabled = device.has_battery();
+                    menu = menu.add_item(item);
+                }
+
+                menu.add_native_item(SystemTrayMenuItem::Separator)
+                    .add_item(CustomMenuItem::new("devtools", "Open DevTools"))
+            }
+            None => no_devices_menu(&menu),
+        };
+    } else {
+        menu = no_devices_menu(&menu);
     }
+
+    menu.add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(CustomMenuItem::new("quit", "Quit"))
 }
 
 fn main() {
-    let status =
-        if let Some(status) = BatteryStatus::get(USB_DEVICE_ID_RAZER_VIPER_ULTIMATE_WIRELESS) {
+    let product_id = settings::get("product_id").unwrap();
+    let product_id = match product_id {
+        Some(product_id) => Some(product_id.parse().unwrap()),
+        None => {
+            if let Some(devices) = razermacos::RazerDevices::new().all() {
+                let product_id = devices
+                    .iter()
+                    .find(|d| d.has_battery())
+                    .unwrap()
+                    .product_id();
+                settings::set("product_id", &product_id.to_string()).unwrap();
+                Some(product_id)
+            } else {
+                None
+            }
+        }
+    };
+
+    let menu = tray_menu(product_id);
+
+    let status = if let Some(product_id) = product_id {
+        if let Some(status) = BatteryStatus::get(product_id) {
             status.to_string()
         } else {
             "".to_string()
-        };
-    let mut menu = SystemTrayMenu::new();
-    if let Some(names) = devices() {
-        for name in names {
-            let item = CustomMenuItem::new("device", name);
-            // item.selected = true;
-            menu = menu.add_item(item);
         }
-    }
-    menu = menu
-        .add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(CustomMenuItem::new("quit", "Quit"));
+    } else {
+        "".to_string()
+    };
 
     #[allow(unused_mut)]
     let mut app = tauri::Builder::default()
@@ -51,11 +93,11 @@ fn main() {
                 window.set_focus().unwrap();
             }
             SystemTrayEvent::MenuItemClick { id, .. } => {
-                let _item_handle = app.tray_handle().get_item(&id);
+                let item_handle = app.tray_handle().get_item(&id);
                 match id.as_str() {
                     "battery" => {
-                        let status =
-                            BatteryStatus::get(USB_DEVICE_ID_RAZER_VIPER_ULTIMATE_WIRELESS);
+                        let product_id = settings::get("product_id").unwrap().unwrap();
+                        let status = BatteryStatus::get(product_id.parse().unwrap());
                         if let Some(status) = status {
                             app.tray_handle()
                                 .get_item("battery")
@@ -63,13 +105,40 @@ fn main() {
                                 .unwrap();
                         }
                     }
+                    "config" => {
+                        let window = app.get_window("main").unwrap();
+                        window.show().unwrap();
+                        window.set_focus().unwrap();
+                    }
                     "no_devices" => {
                         eprintln!("No devices clicked");
+                    }
+                    "devtools" => {
+                        #[cfg(debug_assertions)]
+                        app.get_window("main").unwrap().open_devtools();
                     }
                     "quit" => {
                         app.exit(0);
                     }
-                    _ => {}
+                    str => {
+                        if str.starts_with("device_") {
+                            if let Some(devices) = razermacos::RazerDevices::new().all() {
+                                let str_id = str.replace("device_", "");
+                                settings::set("device", &str_id).unwrap();
+                                let id: u16 = str_id.parse().unwrap();
+                                app.tray_handle();
+                                item_handle.set_selected(true).unwrap();
+                                for device in devices {
+                                    if device.product_id() != id {
+                                        app.tray_handle()
+                                            .get_item(&format!("device_{}", device.product_id()))
+                                            .set_selected(false)
+                                            .unwrap();
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             _ => {}
@@ -77,14 +146,26 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    #[cfg(target_os = "macos")]
-    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+    // #[cfg(target_os = "macos")]
+    // app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
     let handle = app.handle().clone();
-    let mut curr_percentage = BatteryStatus::last_status().unwrap().unwrap_or(0);
+    if let Some(product_id) = product_id {
+        start_updates(handle, product_id);
+    }
+
+    app.run(move |_app_handle, e| {
+        if let RunEvent::ExitRequested { api, .. } = &e {
+            api.prevent_exit();
+        }
+    });
+}
+
+fn start_updates(handle: AppHandle, product_id: u16) {
+    let mut curr_percentage = BatteryStatus::last_status(product_id).unwrap().unwrap_or(0);
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));
-        let status = BatteryStatus::get(USB_DEVICE_ID_RAZER_VIPER_ULTIMATE_WIRELESS);
+        let status = BatteryStatus::get(product_id);
         if let Some(status) = status {
             handle.tray_handle().set_title(&status.to_string()).unwrap();
             if status.percentage != curr_percentage {
@@ -95,14 +176,5 @@ fn main() {
                 curr_percentage = status.percentage;
             }
         }
-    });
-
-    app.run(move |_app_handle, e| {
-        if let RunEvent::ExitRequested { api, .. } = &e {
-            api.prevent_exit();
-        }
-        // if let Some(on_event) = &mut on_event {
-        //     (on_event)(app_handle, e);
-        // }
     });
 }

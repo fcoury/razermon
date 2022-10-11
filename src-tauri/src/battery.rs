@@ -6,20 +6,20 @@ use crate::database;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub(crate) struct BatteryStatus {
-    pub device_id: u32,
+    pub product_id: u16,
     pub name: String,
     pub percentage: u8,
     pub charging: bool,
 }
 
 impl BatteryStatus {
-    pub fn get(device_id: u32) -> Option<Self> {
+    pub fn get(product_id: u16) -> Option<Self> {
         let mut devices = RazerDevices::new();
-        let device = devices.find(device_id as u16);
+        let device = devices.find(product_id);
 
         if let Some(device) = device {
             return Some(BatteryStatus {
-                device_id,
+                product_id,
                 name: device.name.clone(),
                 percentage: device.battery(),
                 charging: device.is_charging(),
@@ -33,17 +33,17 @@ impl BatteryStatus {
         let db = database::Conn::new()?;
         let charging = if self.charging { 1 } else { 0 };
         db.conn.execute(
-            "INSERT INTO battery (device_id, percentage, charging) VALUES (?1, ?2, ?3)",
-            (&self.device_id, &self.percentage, &charging),
+            "INSERT INTO battery (product_id, percentage, charging) VALUES (?1, ?2, ?3)",
+            (&self.product_id, &self.percentage, &charging),
         )?;
         Ok(())
     }
 
-    pub fn last_status() -> anyhow::Result<Option<u8>> {
+    pub fn last_status(product_id: u16) -> anyhow::Result<Option<u8>> {
         let db = database::Conn::new()?;
         let percentage: Option<u8> = db.conn.query_row(
-            "SELECT percentage FROM battery WHERE percentage > 0 ORDER BY created_at DESC LIMIT 1",
-            [],
+            "SELECT percentage FROM battery WHERE percentage > 0 AND product_id = ?1 ORDER BY created_at DESC LIMIT 1",
+            [&product_id],
             |row| row.get::<usize, u8>(0),
         ).optional()?;
         Ok(percentage)

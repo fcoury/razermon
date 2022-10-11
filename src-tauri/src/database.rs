@@ -14,6 +14,7 @@ impl Conn {
         let db_file = db_path.join("razermon.db");
         let conn = Connection::open(db_file)?;
         conn.execute("CREATE TABLE IF NOT EXISTS battery (id INTEGER PRIMARY KEY, created_at TEXT DEFAULT CURRENT_TIMESTAMP, device_id INTEGER, percentage INTEGER, charging INTEGER)", ())?;
+        conn.execute("CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, created_at TEXT DEFAULT CURRENT_TIMESTAMP, key TEXT UNIQUE, value TEXT)", ())?;
         Ok(conn)
     }
 
