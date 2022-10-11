@@ -10,44 +10,6 @@ mod battery;
 mod database;
 mod settings;
 
-fn no_devices_menu(menu: &SystemTrayMenu) -> SystemTrayMenu {
-    let menu = menu.clone();
-    let mut item = CustomMenuItem::new("no_devices", "No devices found");
-    item.enabled = false;
-    menu.add_item(item)
-}
-
-fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
-    let mut menu = SystemTrayMenu::new();
-
-    if let Some(product_id) = product_id {
-        menu = match razermacos::RazerDevices::new().all() {
-            Some(devices) => {
-                menu = menu
-                    .add_item(CustomMenuItem::new("config", "Preferences"))
-                    .add_native_item(SystemTrayMenuItem::Separator);
-
-                for device in devices {
-                    let id = format!("device_{}", device.product_id());
-                    let mut item = CustomMenuItem::new(id, &device.name);
-                    item.selected = product_id == device.product_id();
-                    item.enabled = device.has_battery();
-                    menu = menu.add_item(item);
-                }
-
-                menu.add_native_item(SystemTrayMenuItem::Separator)
-                    .add_item(CustomMenuItem::new("devtools", "Open DevTools"))
-            }
-            None => no_devices_menu(&menu),
-        };
-    } else {
-        menu = no_devices_menu(&menu);
-    }
-
-    menu.add_native_item(SystemTrayMenuItem::Separator)
-        .add_item(CustomMenuItem::new("quit", "Quit"))
-}
-
 fn main() {
     let product_id = settings::get("product_id").unwrap();
     let product_id = match product_id {
@@ -177,4 +139,42 @@ fn start_updates(handle: AppHandle, product_id: u16) {
             }
         }
     });
+}
+
+fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
+    let mut menu = SystemTrayMenu::new();
+
+    if let Some(product_id) = product_id {
+        menu = match razermacos::RazerDevices::new().all() {
+            Some(devices) => {
+                menu = menu
+                    .add_item(CustomMenuItem::new("config", "Preferences"))
+                    .add_native_item(SystemTrayMenuItem::Separator);
+
+                for device in devices {
+                    let id = format!("device_{}", device.product_id());
+                    let mut item = CustomMenuItem::new(id, &device.name);
+                    item.selected = product_id == device.product_id();
+                    item.enabled = device.has_battery();
+                    menu = menu.add_item(item);
+                }
+
+                menu.add_native_item(SystemTrayMenuItem::Separator)
+                    .add_item(CustomMenuItem::new("devtools", "Open DevTools"))
+            }
+            None => no_devices_menu(&menu),
+        };
+    } else {
+        menu = no_devices_menu(&menu);
+    }
+
+    menu.add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(CustomMenuItem::new("quit", "Quit"))
+}
+
+fn no_devices_menu(menu: &SystemTrayMenu) -> SystemTrayMenu {
+    let menu = menu.clone();
+    let mut item = CustomMenuItem::new("no_devices", "No devices found");
+    item.enabled = false;
+    menu.add_item(item)
 }
