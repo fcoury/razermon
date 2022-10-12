@@ -1,5 +1,6 @@
 #[cfg(any(target_os = "macos"))]
 use crate::battery::BatteryStatus;
+use battery::BatteryData;
 use std::{thread, time::Duration};
 use tauri::{
     AppHandle, CustomMenuItem, Manager, RunEvent, SystemTray, SystemTrayEvent, SystemTrayMenu,
@@ -79,6 +80,14 @@ fn main() {
             }
             _ => {}
         })
+        .on_window_event(|event| match event.event() {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                event.window().hide().unwrap();
+                api.prevent_close();
+            }
+            _ => {}
+        })
+        .invoke_handler(tauri::generate_handler![charge_history])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
@@ -95,6 +104,14 @@ fn main() {
             api.prevent_exit();
         }
     });
+}
+
+#[tauri::command]
+fn charge_history(product_id: u16) -> Result<Vec<BatteryData>, String> {
+    match BatteryData::get(product_id) {
+        Ok(data) => Ok(data),
+        Err(err) => Err(err.to_string()),
+    }
 }
 
 fn status(product_id: Option<u16>) -> String {
