@@ -172,6 +172,7 @@ fn load_product_id() -> Option<u16> {
 
 fn start_updates(handle: AppHandle, product_id: u16) {
     let mut curr_percentage = BatteryStatus::last_status(product_id).unwrap().unwrap_or(0);
+    let mut notified = false;
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));
         let status = BatteryStatus::get(product_id);
@@ -183,14 +184,24 @@ fn start_updates(handle: AppHandle, product_id: u16) {
                     eprintln!("WARN: Couldn't save battery status");
                 }
 
-                if curr_percentage < 10 {
+                if status.percentage < 5 {
+                    notified = false;
+                }
+
+                if status.percentage < 10 && status.percentage != 0 && !notified {
                     Notification::new("org.fcoury.razermon")
                         .icon("icons/128x128.png")
                         .title("Battery warning")
                         .body("Your battery is running low.")
                         .show()
                         .unwrap();
+                    notified = true;
                 }
+
+                if notified && status.percentage >= 10 {
+                    notified = false;
+                }
+
                 curr_percentage = status.percentage;
             }
         }
