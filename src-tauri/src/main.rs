@@ -87,7 +87,11 @@ fn main() {
             }
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![charge_history])
+        .invoke_handler(tauri::generate_handler![
+            charge_history,
+            selected_product_id,
+            device_status
+        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
@@ -104,6 +108,16 @@ fn main() {
             api.prevent_exit();
         }
     });
+}
+
+#[tauri::command]
+fn selected_product_id() -> Option<u16> {
+    load_product_id()
+}
+
+#[tauri::command]
+fn device_status(product_id: u16) -> Option<BatteryStatus> {
+    BatteryStatus::get(product_id)
 }
 
 #[tauri::command]

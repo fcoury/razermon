@@ -4,15 +4,31 @@ import {useEffect, useState} from 'react';
 import {AreaChart, CartesianGrid, Area, Tooltip, XAxis, YAxis} from 'recharts';
 
 export default function Home() {
+  const [productId, setProductId] = useState(null);
+  const [status, setStatus] = useState(null);
   const [data, setData] = useState([]);
+
   useEffect(() => {
-    invoke('charge_history', {productId: 123}).then(data => {
-      setData(data.filter(d => d.percentage != 0));
+    invoke('selected_product_id').then(productId => {
+      setProductId(productId);
     }).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (!productId) return;
+
+    invoke('device_status', {productId}).then(status => {
+      setStatus(status);
+    }).catch(console.error);
+
+    invoke('charge_history', {productId}).then(data => {
+      setData(data.filter(d => d.percentage != 0));
+    }).catch(console.error);
+  }, [productId]);
+
   return (
     <Box p={5}>
-      Chart:
+      {status?.name}
       <AreaChart width={600} height={400} data={data} margin={{top: 5, right: 20, bottom: 5, left: 0}}>
         <defs>
           <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
