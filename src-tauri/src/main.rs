@@ -9,6 +9,7 @@ use tauri::{
 
 mod battery;
 mod database;
+mod human_display;
 mod settings;
 
 fn main() {
@@ -212,11 +213,24 @@ fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
     let mut menu = SystemTrayMenu::new();
 
     if let Some(product_id) = product_id {
+        if let Some(status) = BatteryStatus::get(product_id) {
+            if let Ok(remaining) = status.fmt_remaining() {
+                let mut remaining_item =
+                    CustomMenuItem::new("remaining", format!("{} remaining", remaining));
+                remaining_item.enabled = false;
+                menu = menu
+                    .add_item(remaining_item)
+                    .add_native_item(SystemTrayMenuItem::Separator);
+            }
+        }
+    }
+
+    if let Some(product_id) = product_id {
         menu = match razermacos::RazerDevices::new().all() {
             Some(devices) => {
                 menu = menu
                     .add_item(CustomMenuItem::new("config", "Preferences"))
-                    .add_item(CustomMenuItem::new("notify", "Notify"))
+                    .add_item(CustomMenuItem::new("notify", "Test Notification"))
                     .add_native_item(SystemTrayMenuItem::Separator);
 
                 for device in devices {
