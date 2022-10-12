@@ -64,3 +64,24 @@ impl fmt::Display for BatteryStatus {
         write!(f, "{}{}%", icon, self.percentage)
     }
 }
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct BatteryData {
+    pub product_id: u16,
+    pub created_at: String,
+    pub percentage: u8,
+    pub charging: bool,
+}
+
+impl BatteryData {
+    pub fn get(product_id: u16) -> anyhow::Result<Vec<BatteryData>> {
+        let db = database::Conn::new()?.conn;
+        let mut statement = db
+            .prepare("SELECT * FROM battery WHERE product_id = ?1")
+            .unwrap();
+        let res = serde_rusqlite::from_rows::<BatteryData>(statement.query([&product_id]).unwrap());
+        let res = res.collect::<Vec<_>>();
+        let res = res.into_iter().collect::<Result<Vec<_>, _>>();
+        Ok(res?)
+    }
+}
