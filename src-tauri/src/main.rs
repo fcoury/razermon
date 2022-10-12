@@ -1,9 +1,10 @@
 #[cfg(any(target_os = "macos"))]
 use crate::battery::BatteryStatus;
+use battery::BatteryData;
 use std::{thread, time::Duration};
 use tauri::{
-    AppHandle, CustomMenuItem, Manager, RunEvent, SystemTray, SystemTrayEvent, SystemTrayMenu,
-    SystemTrayMenuItem,
+    api::notification::Notification, AppHandle, CustomMenuItem, Manager, RunEvent, SystemTray,
+    SystemTrayEvent, SystemTrayMenu, SystemTrayMenuItem,
 };
 
 mod battery;
@@ -53,6 +54,14 @@ fn main() {
                         #[cfg(debug_assertions)]
                         app.get_window("main").unwrap().open_devtools();
                     }
+                    "notify" => {
+                        Notification::new(&app.config().tauri.bundle.identifier)
+                            .icon("icons/128x128.png")
+                            .title("Battery warning")
+                            .body("Your battery is running low.")
+                            .show()
+                            .unwrap();
+                    }
                     "quit" => {
                         app.exit(0);
                     }
@@ -79,6 +88,18 @@ fn main() {
             }
             _ => {}
         })
+        .on_window_event(|event| match event.event() {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                event.window().hide().unwrap();
+                api.prevent_close();
+            }
+            _ => {}
+        })
+        .invoke_handler(tauri::generate_handler![
+            charge_history,
+            selected_product_id,
+            device_status
+        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
@@ -95,6 +116,24 @@ fn main() {
             api.prevent_exit();
         }
     });
+}
+
+#[tauri::command]
+fn selected_product_id() -> Option<u16> {
+    load_product_id()
+}
+
+#[tauri::command]
+fn device_status(product_id: u16) -> Option<BatteryStatus> {
+    BatteryStatus::get(product_id)
+}
+
+#[tauri::command]
+fn charge_history(product_id: u16) -> Result<Vec<BatteryData>, String> {
+    match BatteryData::get(product_id) {
+        Ok(data) => Ok(data),
+        Err(err) => Err(err.to_string()),
+    }
 }
 
 fn status(product_id: Option<u16>) -> String {
@@ -143,6 +182,15 @@ fn start_updates(handle: AppHandle, product_id: u16) {
                 if res.is_err() {
                     eprintln!("WARN: Couldn't save battery status");
                 }
+
+                if curr_percentage < 10 {
+                    Notification::new("org.fcoury.razermon")
+                        .icon("icons/128x128.png")
+                        .title("Battery warning")
+                        .body("Your battery is running low.")
+                        .show()
+                        .unwrap();
+                }
                 curr_percentage = status.percentage;
             }
         }
@@ -157,6 +205,7 @@ fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
             Some(devices) => {
                 menu = menu
                     .add_item(CustomMenuItem::new("config", "Preferences"))
+                    .add_item(CustomMenuItem::new("notify", "Notify"))
                     .add_native_item(SystemTrayMenuItem::Separator);
 
                 for device in devices {
