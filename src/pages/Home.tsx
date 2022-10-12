@@ -9,7 +9,7 @@ export default function Home() {
   const [data, setData] = useState([]);
 
   useEffect(() => {
-    invoke('selected_product_id').then(productId => {
+    invoke('selected_product_id').then((productId: any) => {
       setProductId(productId);
     }).catch(console.error);
   }, []);
@@ -17,18 +17,18 @@ export default function Home() {
   useEffect(() => {
     if (!productId) return;
 
-    invoke('device_status', {productId}).then(status => {
+    invoke('device_status', {productId}).then((status: any) => {
       setStatus(status);
     }).catch(console.error);
 
-    invoke('charge_history', {productId}).then(data => {
-      setData(data.filter(d => d.percentage != 0));
+    invoke('charge_history', {productId}).then((data: any) => {
+      setData(data.filter((d: any) => d.percentage != 0));
     }).catch(console.error);
   }, [productId]);
 
   return (
     <Box p={5}>
-      {status?.name}
+      {(status as any)?.name}
       <AreaChart width={600} height={400} data={data} margin={{top: 5, right: 20, bottom: 5, left: 0}}>
         <defs>
           <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
