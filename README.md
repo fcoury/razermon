@@ -2,7 +2,7 @@
 
 Add a Razer device battery monitoring gadget to your macOS menubar.
 
-![Screenshot of the Menubar Gadget](docs/screenshot.png)
+![Screenshot of the Menubar Gadget](https://user-images.githubusercontent.com/1371/195428733-6c96bdc0-74da-4d35-9c14-20ef28ad20a7.png)
 
 ## Thanks
 
