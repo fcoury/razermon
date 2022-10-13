@@ -63,8 +63,9 @@ export default function Home() {
 
     invoke<BatteryData[]>('charge_history', { productId })
       .then((res: BatteryData[]) => {
-        let values = res
-          .filter((d) => d.percentage != 0)
+        let data = res.filter((d) => d.percentage > 0);
+        let values = data
+          .filter((d, i) => i == 0 || d.percentage != data[i - 1].percentage)
           .map((d) => ({
             ...d,
             millis: DateTime.fromFormat(
