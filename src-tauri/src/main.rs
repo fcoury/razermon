@@ -46,6 +46,7 @@ fn main() {
                     "config" => {
                         let window = app.get_window("main").unwrap();
                         window.show().unwrap();
+                        window.eval("window.location.reload()").unwrap();
                         window.set_focus().unwrap();
                     }
                     "no_devices" => {
