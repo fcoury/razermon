@@ -43,6 +43,7 @@ export default function Home() {
   const [productId, setProductId] = useState(null);
   const [status, setStatus] = useState(null);
   const [data, setData] = useState<BatteryData[]>([]);
+  const [batteryStats, setBatteryStats] = useState({});
 
   useEffect(() => {
     invoke('selected_product_id')
@@ -77,13 +78,21 @@ export default function Home() {
         setData(values);
       })
       .catch(console.error);
+
+    invoke('battery_stats', { productId })
+      .then(([status, remaining]: any) => {
+        console.log('status/remaining', status, remaining);
+        setBatteryStats({ status, remaining });
+      })
+      .catch(console.error);
   }, [productId]);
 
   if (!data.length) return null;
 
   return (
     <Box p={5}>
-      {(status as any)?.name}
+      <div>{(status as any)?.name}</div>
+      <div>{batteryStats.remaining}</div>
       <AreaChart width={900} height={400} data={data}>
         <defs>
           <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
