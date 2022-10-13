@@ -16,6 +16,7 @@
     "@emotion/styled": "^11.10.4",
     "@tauri-apps/api": "^1.1.0",
     "framer-motion": "^7.5.3",
+    "luxon": "^3.0.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^4.4.0",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1.1.1",
+    "@types/luxon": "^3.0.1",
     "@types/react": "^18.0.17",
     "@types/react-dom": "^18.0.6",
     "@vitejs/plugin-react": "^2.1.0",
