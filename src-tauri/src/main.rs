@@ -203,26 +203,40 @@ fn start_updates(handle: AppHandle, product_id: u16) {
                     notified = false;
                 }
 
+                if let Some(remaining) = remaining(Some(product_id)) {
+                    handle
+                        .tray_handle()
+                        .get_item("remaining")
+                        .set_title(&remaining)
+                        .unwrap();
+                }
+
                 curr_percentage = status.percentage;
             }
         }
     });
 }
 
-fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
-    let mut menu = SystemTrayMenu::new();
-
+fn remaining(product_id: Option<u16>) -> Option<String> {
     if let Some(product_id) = product_id {
         if let Some(status) = BatteryStatus::get(product_id) {
             if let Ok(remaining) = status.fmt_remaining() {
-                let mut remaining_item =
-                    CustomMenuItem::new("remaining", format!("{} remaining", remaining));
-                remaining_item.enabled = false;
-                menu = menu
-                    .add_item(remaining_item)
-                    .add_native_item(SystemTrayMenuItem::Separator);
+                return Some(format!("{} remaining", remaining));
             }
         }
+    }
+    None
+}
+
+fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
+    let mut menu = SystemTrayMenu::new();
+
+    if let Some(remaining) = remaining(product_id) {
+        let mut remaining_item = CustomMenuItem::new("remaining", remaining);
+        remaining_item.enabled = false;
+        menu = menu
+            .add_item(remaining_item)
+            .add_native_item(SystemTrayMenuItem::Separator);
     }
 
     if let Some(product_id) = product_id {
