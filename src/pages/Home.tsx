@@ -71,6 +71,7 @@ export default function Home() {
             millis: DateTime.fromFormat(
               d.created_at as string,
               'yyyy-MM-dd HH:mm:ss',
+              { zone: 'utc' },
             ).toMillis(),
           }));
         setData(values);
