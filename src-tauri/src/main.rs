@@ -58,8 +58,8 @@ fn main() {
                     "notify" => {
                         Notification::new(&app.config().tauri.bundle.identifier)
                             .icon("icons/128x128.png")
-                            .title("Battery warning")
-                            .body("Your battery is running low.")
+                            .title("Notification test")
+                            .body("If you are seeing this text, it worked 😊")
                             .show()
                             .unwrap();
                     }
@@ -185,10 +185,12 @@ fn start_updates(handle: AppHandle, product_id: u16) {
                     eprintln!("WARN: Couldn't save battery status");
                 }
 
+                // notifies again at 5%
                 if status.percentage < 5 {
                     notified = false;
                 }
 
+                // if battery is below threshold and not already notified
                 if status.percentage < 10 && status.percentage != 0 && !notified {
                     Notification::new("org.fcoury.razermon")
                         .icon("icons/128x128.png")
