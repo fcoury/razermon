@@ -43,7 +43,7 @@ fn main() {
                                 .unwrap();
                         }
                     }
-                    "config" => {
+                    "usage" => {
                         let window = app.get_window("main").unwrap();
                         window.show().unwrap();
                         window.eval("window.location.reload()").unwrap();
@@ -100,7 +100,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             charge_history,
             selected_product_id,
-            device_status
+            device_status,
+            battery_stats,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -134,6 +135,14 @@ fn device_status(product_id: u16) -> Option<BatteryStatus> {
 fn charge_history(product_id: u16) -> Result<Vec<BatteryData>, String> {
     match BatteryData::get(product_id) {
         Ok(data) => Ok(data),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[tauri::command]
+fn battery_stats(product_id: u16) -> Result<(i64, Option<String>), String> {
+    match BatteryData::get(product_id) {
+        Ok(data) => Ok((BatteryData::consumption(&data), remaining(Some(product_id)))),
         Err(err) => Err(err.to_string()),
     }
 }
@@ -246,7 +255,7 @@ fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
         menu = match razermacos::RazerDevices::new().all() {
             Some(devices) => {
                 menu = menu
-                    .add_item(CustomMenuItem::new("config", "Preferences"))
+                    .add_item(CustomMenuItem::new("usage", "Usage Chart..."))
                     .add_item(CustomMenuItem::new("notify", "Test Notification"))
                     .add_native_item(SystemTrayMenuItem::Separator);
 
