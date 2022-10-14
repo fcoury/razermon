@@ -140,9 +140,12 @@ fn charge_history(product_id: u16) -> Result<Vec<BatteryData>, String> {
 }
 
 #[tauri::command]
-fn battery_stats(product_id: u16) -> Result<(i64, Option<String>), String> {
+fn battery_stats(product_id: u16) -> Result<Option<(i64, Option<String>)>, String> {
     match BatteryData::get(product_id) {
-        Ok(data) => Ok((BatteryData::consumption(&data), remaining(Some(product_id)))),
+        Ok(data) => match BatteryData::consumption(&data) {
+            Some(consumption) => Ok(Some((consumption, remaining(Some(product_id))))),
+            None => Ok(None),
+        },
         Err(err) => Err(err.to_string()),
     }
 }
@@ -233,7 +236,10 @@ fn remaining(product_id: Option<u16>) -> Option<String> {
     if let Some(product_id) = product_id {
         if let Some(status) = BatteryStatus::get(product_id) {
             if let Ok(remaining) = status.fmt_remaining() {
-                return Some(format!("{} remaining", remaining));
+                return match remaining {
+                    Some(r) => Some(format!("{} remaining", r)),
+                    None => None,
+                };
             }
         }
     }
@@ -243,13 +249,16 @@ fn remaining(product_id: Option<u16>) -> Option<String> {
 fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
     let mut menu = SystemTrayMenu::new();
 
-    if let Some(remaining) = remaining(product_id) {
-        let mut remaining_item = CustomMenuItem::new("remaining", remaining);
-        remaining_item.enabled = false;
-        menu = menu
-            .add_item(remaining_item)
-            .add_native_item(SystemTrayMenuItem::Separator);
-    }
+    let remaining = match remaining(product_id) {
+        Some(remaining) => remaining,
+        None => "Not enough data to calulate ETA yet".to_string(),
+    };
+
+    let mut remaining_item = CustomMenuItem::new("remaining", remaining);
+    remaining_item.enabled = false;
+    menu = menu
+        .add_item(remaining_item)
+        .add_native_item(SystemTrayMenuItem::Separator);
 
     if let Some(product_id) = product_id {
         menu = match razermacos::RazerDevices::new().all() {
