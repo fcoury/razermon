@@ -51,15 +51,23 @@ impl BatteryStatus {
         Ok(())
     }
 
-    pub fn remaining(&self) -> anyhow::Result<Duration> {
+    pub fn remaining(&self) -> anyhow::Result<Option<Duration>> {
         let entries = BatteryData::get(self.product_id)?;
         let consumption = BatteryData::consumption(&entries);
-        Ok(Duration::seconds(consumption * self.percentage as i64))
+        match consumption {
+            Some(consumption) => Ok(Some(Duration::seconds(
+                consumption * self.percentage as i64,
+            ))),
+            None => Ok(None),
+        }
     }
 
-    pub fn fmt_remaining(&self) -> anyhow::Result<String> {
+    pub fn fmt_remaining(&self) -> anyhow::Result<Option<String>> {
         let duration = self.remaining()?;
-        Ok(duration.as_human().to_string())
+        match duration {
+            Some(duration) => Ok(Some(duration.as_human().to_string())),
+            None => Ok(None),
+        }
     }
 }
 
@@ -124,7 +132,7 @@ impl BatteryData {
     /// zero
     /// - When the charge percentage drop 1% again, calculate the first time for the last
     /// percentage, taking out the accumulated idle time
-    pub fn consumption(entries: &Vec<BatteryData>) -> i64 {
+    pub fn consumption(entries: &Vec<BatteryData>) -> Option<i64> {
         let mut measurements = vec![];
         let mut idle_intervals = vec![];
         let mut last_entry: Option<&BatteryData> = None;
@@ -179,9 +187,9 @@ impl BatteryData {
         // TODO: Make this an Option and return None when there are no measurements to assure we're
         // telling the user it's to early to have an idea on how much the battery will last
         if measurements.len() < 1 {
-            return 0;
+            return None;
         }
-        total_time / measurements.len() as i64
+        Some(total_time / measurements.len() as i64)
     }
 }
 
@@ -203,12 +211,12 @@ mod tests {
         ];
 
         let duration = BatteryData::consumption(&entries);
-        assert_eq!(duration, 2728);
+        assert_eq!(duration, Some(2728));
     }
 
     #[test]
     fn test_no_measurements() {
         let duration = BatteryData::consumption(&vec![]);
-        assert_eq!(duration, 0);
+        assert_eq!(duration, None);
     }
 }
