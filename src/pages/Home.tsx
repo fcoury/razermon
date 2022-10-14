@@ -92,7 +92,7 @@ export default function Home() {
   return (
     <Box p={5}>
       <div>{(status as any)?.name}</div>
-      <div>{batteryStats.remaining}</div>
+      <div>{(batteryStats as any)?.remaining}</div>
       <AreaChart width={900} height={400} data={data}>
         <defs>
           <linearGradient id="colorUv" x1="0" y1="0" x2="0" y2="1">
