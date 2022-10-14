@@ -176,6 +176,11 @@ impl BatteryData {
             last_line_entry = Some(entry);
         }
         let total_time = measurements.iter().map(|d| d.num_seconds()).sum::<i64>();
+        // TODO: Make this an Option and return None when there are no measurements to assure we're
+        // telling the user it's to early to have an idea on how much the battery will last
+        if measurements.len() < 1 {
+            return 0;
+        }
         total_time / measurements.len() as i64
     }
 }
@@ -199,5 +204,11 @@ mod tests {
 
         let duration = BatteryData::consumption(&entries);
         assert_eq!(duration, 2728);
+    }
+
+    #[test]
+    fn test_no_measurements() {
+        let duration = BatteryData::consumption(&vec![]);
+        assert_eq!(duration, 0);
     }
 }
