@@ -1,4 +1,4 @@
-use std::thread;
+use std::{thread, time::Duration};
 
 use associated::Associated;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -43,8 +43,10 @@ pub(crate) enum RazerTransactionId {
 }
 
 /// Different groups of commands that can be sent to the keyboard
+/// get_razer_report(0x03, 0x00, 0x03) -> 0x03 is the class
 #[repr(u8)]
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub(crate) enum RazerCommandClass {
     StandardDevice = 0x00,
     StandardLED = 0x03,
@@ -71,6 +73,7 @@ pub(crate) struct RazerCommandParts(RazerCommandClass, u8, u8);
 /// Every kind of command that be sent in a command
 #[derive(Associated)]
 #[associated(Type = RazerCommandParts)]
+#[allow(dead_code)]
 pub(crate) enum RazerCommand {
     #[assoc_const(RazerCommandParts(RazerCommandClass::StandardDevice, 0x04, 2))]
     DeviceMode,
@@ -96,6 +99,10 @@ pub(crate) enum RazerCommand {
     ExtendedMatrixBrightness,
     #[assoc_const(RazerCommandParts(RazerCommandClass::Blade, 0x04, 2))]
     BladeBrightness,
+    #[assoc_const(RazerCommandParts(RazerCommandClass::Misc, 0x80, 2))]
+    BatteryCharge,
+    #[assoc_const(RazerCommandParts(RazerCommandClass::Misc, 0x84, 2))]
+    ChargingStatus,
 }
 
 pub(crate) struct RazerReport {
@@ -207,7 +214,8 @@ impl RazerReport {
 
     pub fn send_and_receive_packet(&self, hid_device: &HidDevice) -> Result<Bytes, RazerError> {
         self.send_packet(hid_device)?;
-        thread::yield_now();
+        // thread::yield_now();
+        thread::sleep(Duration::from_micros(59900));
         self.receive_packet(hid_device)
     }
 }

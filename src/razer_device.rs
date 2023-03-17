@@ -8,7 +8,7 @@ use strum::{Display, FromRepr};
 pub const RAZER_VENDOR_ID: u16 = 0x1532;
 
 /// Infomation for connecting to the management device of the the razer device
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct RazerDeviceConnectInfo {
     pub interface_number: Option<i32>,
     pub usage: Option<u16>,
@@ -22,6 +22,7 @@ pub trait RazerDeviceKind {
 }
 
 /// Represents the connection to the device
+#[derive(Debug)]
 pub struct RazerDevice<T>
 where
     T: RazerDeviceKind,
@@ -160,6 +161,32 @@ where
         );
         let mut response = report.send_and_receive_packet(&self.hid_device)?;
         response.advance(2);
+        Ok(response.get_u8())
+    }
+
+    /// Gets the Battery charge percentage.
+    pub fn get_battery_charge(&self) -> Result<u8, RazerError> {
+        let report = RazerReport::new(
+            RazerCommandDirection::DeviceToHost,
+            RazerCommand::BatteryCharge,
+            vec![0x00, 0x00].into(),
+            self.kind.get_transaction_device(),
+        );
+        let mut response = report.send_and_receive_packet(&self.hid_device)?;
+        response.advance(1);
+        Ok(response.get_u8())
+    }
+
+    /// Gets the Battery charge percentage.
+    pub fn get_charging_status(&self) -> Result<u8, RazerError> {
+        let report = RazerReport::new(
+            RazerCommandDirection::DeviceToHost,
+            RazerCommand::ChargingStatus,
+            vec![0x00, 0x00].into(),
+            self.kind.get_transaction_device(),
+        );
+        let mut response = report.send_and_receive_packet(&self.hid_device)?;
+        response.advance(1);
         Ok(response.get_u8())
     }
 

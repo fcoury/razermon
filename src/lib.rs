@@ -17,19 +17,22 @@
 extern crate hidapi;
 pub mod razer_device;
 pub mod razer_keyboard;
+pub mod razer_mouse;
 pub mod razer_report;
 
 use associated::Associated;
 use hidapi::{HidApi, HidError};
 use razer_device::RazerDevice;
 use razer_keyboard::RazerKeyboardKind;
+use razer_mouse::RazerMouseKind;
 use razer_report::RazerStatus;
 use thiserror::Error;
 
 /// Structure that contains every type of device found connected to the computer
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct FoundRazerDevices {
     pub keyboards: Vec<RazerDevice<RazerKeyboardKind>>,
+    pub mice: Vec<RazerDevice<RazerMouseKind>>,
 }
 
 /// Entry point for interacting with any device. Finds anything connected to the computer.
@@ -43,10 +46,10 @@ pub fn scan_for_devices() -> Result<FoundRazerDevices, RazerError> {
         if device.vendor_id() == razer_device::RAZER_VENDOR_ID {
             if let Some(valid_device) = RazerKeyboardKind::from_repr(device.product_id()) {
                 let connect_info = valid_device.get_associated();
-                if (connect_info.interface_number == None
+                if (connect_info.interface_number.is_none()
                     || connect_info.interface_number == Some(device.interface_number()))
-                    && (connect_info.usage == None || connect_info.usage == Some(device.usage()))
-                    && (connect_info.usage_page == None
+                    && (connect_info.usage.is_none() || connect_info.usage == Some(device.usage()))
+                    && (connect_info.usage_page.is_none()
                         || connect_info.usage_page == Some(device.usage_page()))
                 {
                     let name = match device.product_string() {
@@ -61,6 +64,27 @@ pub fn scan_for_devices() -> Result<FoundRazerDevices, RazerError> {
                             serial,
                             hid_device,
                         ));
+                    }
+                }
+            }
+
+            if let Some(valid_device) = RazerMouseKind::from_repr(device.product_id()) {
+                let connect_info = valid_device.get_associated();
+                if (connect_info.interface_number.is_none()
+                    || connect_info.interface_number == Some(device.interface_number()))
+                    && (connect_info.usage.is_none() || connect_info.usage == Some(device.usage()))
+                    && (connect_info.usage_page.is_none()
+                        || connect_info.usage_page == Some(device.usage_page()))
+                {
+                    let name = match device.product_string() {
+                        Some(x) => x.to_string(),
+                        None => valid_device.to_string(),
+                    };
+                    let serial = device.serial_number().map(|x| x.to_string());
+                    if let Ok(hid_device) = device.open_device(&api) {
+                        devices
+                            .mice
+                            .push(RazerDevice::new(valid_device, name, serial, hid_device));
                     }
                 }
             }
