@@ -1,8 +1,10 @@
+use std::fmt;
+
 use crate::human_display::HumanDuration;
 use chrono::{Duration, NaiveDateTime};
+use razer_driver_rs::scan_mice;
 use razermacos::RazerDevices;
 use rusqlite::OptionalExtension;
-use std::fmt;
 
 use crate::database;
 
@@ -16,15 +18,21 @@ pub(crate) struct BatteryStatus {
 
 impl BatteryStatus {
     pub fn get(product_id: u16) -> Option<Self> {
-        let mut devices = RazerDevices::new();
-        let device = devices.find(product_id);
+        let device = scan_mice(product_id);
+        let Ok(device) = device else {
+            return None;
+        };
 
         if let Some(device) = device {
+            let battery = device.get_battery_charge().unwrap();
+            let percentage = (battery as f32 / 255.0 * 100.0).round() as u8;
+            let charging = device.get_charging_status().unwrap() == 1;
+
             return Some(BatteryStatus {
                 product_id,
                 name: device.name.clone(),
-                percentage: device.battery(),
-                charging: device.is_charging(),
+                percentage,
+                charging,
             });
         }
 
