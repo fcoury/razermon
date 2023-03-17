@@ -1,4 +1,6 @@
-use crate::{razer_report::*, RazerError};
+use crate::{
+    razer_keyboard::RazerKeyboardKind, razer_mouse::RazerMouseKind, razer_report::*, RazerError,
+};
 use bytes::{Buf, Bytes};
 use hidapi::HidDevice;
 use std::fmt::Display;
@@ -33,6 +35,21 @@ where
     pub(crate) hid_device: HidDevice,
 }
 
+#[derive(Debug)]
+pub enum RazerDeviceType {
+    Keyboard(RazerKeyboardKind),
+    Mouse(RazerMouseKind),
+}
+
+impl RazerDeviceKind for RazerDeviceType {
+    fn get_transaction_device(&self) -> RazerTransactionDevice {
+        match self {
+            RazerDeviceType::Keyboard(kind) => kind.get_transaction_device(),
+            RazerDeviceType::Mouse(kind) => kind.get_transaction_device(),
+        }
+    }
+}
+
 /// The major and minor version of the firmware of the device
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RazerFirmwareVersion(u8, u8);
@@ -59,20 +76,6 @@ impl<T> RazerDevice<T>
 where
     T: RazerDeviceKind,
 {
-    pub(crate) fn new(
-        kind: T,
-        name: String,
-        serial: Option<String>,
-        hid_device: HidDevice,
-    ) -> Self {
-        RazerDevice {
-            kind,
-            name,
-            serial,
-            hid_device,
-        }
-    }
-
     /// Reads the firmware version of the device
     pub fn get_firmware_version(&self) -> Result<RazerFirmwareVersion, RazerError> {
         let report = RazerReport::new(

@@ -1,10 +1,7 @@
 use razer_driver_rs::scan_for_devices;
 
 fn main() {
-    let devices = scan_for_devices().unwrap();
-    println!("{:?}", devices);
-
-    for device in devices.mice {
+    for device in scan_for_devices().unwrap().into_iter() {
         println!("Name: {}", device.name);
         let bat = device.get_battery_charge().unwrap();
         let percentage = bat as f32 / 255.0 * 100.0;
