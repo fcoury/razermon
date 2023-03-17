@@ -35,6 +35,36 @@ pub struct FoundRazerDevices {
     pub mice: Vec<RazerDevice<RazerMouseKind>>,
 }
 
+pub fn scan_mice(product_id: u16) -> Result<Option<RazerDevice<RazerMouseKind>>, RazerError> {
+    let api = HidApi::new()?;
+    for device in api.device_list() {
+        if device.vendor_id() == razer_device::RAZER_VENDOR_ID {
+            if let Some(valid_device) = RazerMouseKind::from_repr(device.product_id()) {
+                let connect_info = valid_device.get_associated();
+                if (connect_info.interface_number.is_none()
+                    || connect_info.interface_number == Some(device.interface_number()))
+                    && (connect_info.usage.is_none() || connect_info.usage == Some(device.usage()))
+                    && (connect_info.usage_page.is_none()
+                        || connect_info.usage_page == Some(device.usage_page()))
+                {
+                    let name = match device.product_string() {
+                        Some(x) => x.to_string(),
+                        None => valid_device.to_string(),
+                    };
+                    let serial = device.serial_number().map(|x| x.to_string());
+                    if let Ok(hid_device) = device.open_device(&api) {
+                        let razer_device = RazerDevice::new(valid_device, name, serial, hid_device);
+                        if device.product_id() == product_id {
+                            return Ok(Some(razer_device));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// Entry point for interacting with any device. Finds anything connected to the computer.
 ///
 /// The way the HIDAPI library works means we cannot cheaply connect to an individual device,
