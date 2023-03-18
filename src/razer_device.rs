@@ -231,4 +231,16 @@ where
         response.advance(2);
         Ok(response.get_u8())
     }
+
+    pub fn get_led_state(&self, store: RazerStorage, led: RazerLed) -> Result<u8, RazerError> {
+        let report = RazerReport::new(
+            RazerCommandDirection::DeviceToHost,
+            RazerCommand::LedState,
+            vec![store as u8, led as u8].into(),
+            self.kind.get_transaction_device(),
+        );
+        let mut response = report.send_and_receive_packet(&self.hid_device)?;
+        response.advance(2);
+        Ok(response.get_u8())
+    }
 }

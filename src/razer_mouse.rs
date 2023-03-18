@@ -19,15 +19,12 @@ pub enum RazerMouseKind {
     ViperUltimateWireless = 0x007b,
 }
 
-// impl RazerKeyboardKind {}
-
 impl RazerDeviceKind for RazerMouseKind {
     fn get_transaction_device(&self) -> RazerTransactionDevice {
-        // TODO
-        // match self {
-        //     _ => RazerTransactionDevice::Default,
-        // }
-
-        RazerTransactionDevice::Zero
+        match self {
+            RazerMouseKind::BasiliskV3ProWireless => RazerTransactionDevice::Seven,
+            RazerMouseKind::BasiliskV3ProWirelessDongle => RazerTransactionDevice::Seven,
+            RazerMouseKind::ViperUltimateWireless => RazerTransactionDevice::Seven,
+        }
     }
 }

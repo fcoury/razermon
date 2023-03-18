@@ -22,7 +22,7 @@ pub enum RazerStatus {
     /// The command timed out
     CommandNoResponseOrTimeout = 4,
     /// The command is not supported by this device
-    CommandNotSupport = 5,
+    CommandNotSupported = 5,
 }
 
 /// Some magic that some devices need to be different. What each value means is still unsure.
@@ -33,6 +33,9 @@ pub enum RazerTransactionDevice {
     Zero = 0x00,
     One = 0x20,
     Four = 0x80,
+    Five = 0xFF,
+    Six = 0x01,
+    Seven = 0x3f,
 }
 
 /// Some magic that all devices send the same magic for.
