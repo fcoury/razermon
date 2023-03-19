@@ -61,37 +61,25 @@ impl<'a> IntoIterator for &'a FoundRazerDevices {
 ///
 /// The way the HIDAPI library works means we cannot cheaply connect to an individual device,
 /// so even if you want something specific this function would be just as fast.
-pub fn scan_for_devices() -> Result<FoundRazerDevices, RazerError> {
+pub fn scan_for_devices(product_id: Option<u16>) -> Result<FoundRazerDevices, RazerError> {
     let mut devices = FoundRazerDevices::default();
     let api = HidApi::new()?;
+
     for device in api.device_list() {
         if device.vendor_id() == razer_device::RAZER_VENDOR_ID {
+            let mut razer_device = None;
+            let mut association = None;
+
             if let Some(valid_device) = RazerKeyboardKind::from_repr(device.product_id()) {
-                let connect_info = valid_device.get_associated();
-                if (connect_info.interface_number.is_none()
-                    || connect_info.interface_number == Some(device.interface_number()))
-                    && (connect_info.usage.is_none() || connect_info.usage == Some(device.usage()))
-                    && (connect_info.usage_page.is_none()
-                        || connect_info.usage_page == Some(device.usage_page()))
-                {
-                    let name = match device.product_string() {
-                        Some(x) => x.to_string(),
-                        None => valid_device.to_string(),
-                    };
-                    let serial = device.serial_number().map(|x| x.to_string());
-                    if let Ok(hid_device) = device.open_device(&api) {
-                        devices.devices.push(RazerDevice {
-                            kind: RazerDeviceType::Keyboard(valid_device),
-                            name,
-                            serial,
-                            hid_device,
-                        });
-                    }
-                }
+                razer_device = Some(RazerDeviceType::Keyboard(valid_device));
+                association = Some(valid_device.get_associated());
+            } else if let Some(valid_device) = RazerMouseKind::from_repr(device.product_id()) {
+                razer_device = Some(RazerDeviceType::Mouse(valid_device));
+                association = Some(valid_device.get_associated());
             }
 
-            if let Some(valid_device) = RazerMouseKind::from_repr(device.product_id()) {
-                let connect_info = valid_device.get_associated();
+            if let Some(device_type) = razer_device {
+                let connect_info = association.unwrap();
                 if (connect_info.interface_number.is_none()
                     || connect_info.interface_number == Some(device.interface_number()))
                     && (connect_info.usage.is_none() || connect_info.usage == Some(device.usage()))
@@ -100,21 +88,32 @@ pub fn scan_for_devices() -> Result<FoundRazerDevices, RazerError> {
                 {
                     let name = match device.product_string() {
                         Some(x) => x.to_string(),
-                        None => valid_device.to_string(),
+                        None => device_type.to_string(),
                     };
                     let serial = device.serial_number().map(|x| x.to_string());
                     if let Ok(hid_device) = device.open_device(&api) {
-                        devices.devices.push(RazerDevice {
-                            kind: RazerDeviceType::Mouse(valid_device),
+                        let found_device = RazerDevice {
+                            kind: device_type,
                             name,
                             serial,
+                            device: device.clone(),
                             hid_device,
-                        });
+                        };
+
+                        if let Some(product_id) = product_id {
+                            if device.product_id() == product_id {
+                                devices.devices.push(found_device);
+                                return Ok(devices);
+                            }
+                        } else {
+                            devices.devices.push(found_device);
+                        }
                     }
                 }
             }
         }
     }
+
     Ok(devices)
 }
 

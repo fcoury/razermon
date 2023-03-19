@@ -7,7 +7,7 @@ use razer_driver_rs::{
 
 fn main() {
     let command = env::args().nth(1).expect("Usage: battery <command>");
-    let devices = scan_for_devices().unwrap();
+    let devices = scan_for_devices(None).unwrap();
     let mut devices = devices.into_iter().collect::<Vec<_>>();
     devices.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -27,7 +27,11 @@ fn main() {
                     (Ok(bat), Ok(charging)) => {
                         let percentage = bat as f32 / 255.0 * 100.0;
                         let charging = if charging == 1 { "⚡️" } else { "🔋" };
-                        println!("{} => {charging}{percentage:.0}%", device.name,);
+                        println!(
+                            "{} (product_id = {}) => {charging}{percentage:.0}%",
+                            device.name,
+                            device.device.product_id()
+                        );
                     }
                     _ => {
                         println!("{} => No info", device.name);

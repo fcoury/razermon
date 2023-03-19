@@ -2,7 +2,7 @@ use crate::{
     razer_keyboard::RazerKeyboardKind, razer_mouse::RazerMouseKind, razer_report::*, RazerError,
 };
 use bytes::{Buf, Bytes};
-use hidapi::HidDevice;
+use hidapi::{DeviceInfo, HidDevice};
 use std::fmt::Display;
 use strum::{Display, FromRepr};
 
@@ -31,11 +31,12 @@ where
 {
     pub kind: T,
     pub name: String,
+    pub device: DeviceInfo,
     pub(crate) serial: Option<String>,
     pub(crate) hid_device: HidDevice,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
 pub enum RazerDeviceType {
     Keyboard(RazerKeyboardKind),
     Mouse(RazerMouseKind),
