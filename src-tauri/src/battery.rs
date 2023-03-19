@@ -2,8 +2,7 @@ use std::fmt;
 
 use crate::human_display::HumanDuration;
 use chrono::{Duration, NaiveDateTime};
-use razer_driver_rs::scan_mice;
-use razermacos::RazerDevices;
+use razer_driver_rs::scan_for_devices;
 use rusqlite::OptionalExtension;
 
 use crate::database;
@@ -17,26 +16,22 @@ pub(crate) struct BatteryStatus {
 }
 
 impl BatteryStatus {
-    pub fn get(product_id: u16) -> Option<Self> {
-        let device = scan_mice(product_id);
-        let Ok(device) = device else {
-            return None;
+    pub fn get(product_id: u16) -> anyhow::Result<Option<Self>> {
+        let found = scan_for_devices(Some(product_id))?;
+        let Some(device) = found.devices.get(0) else {
+            return Ok(None);
         };
 
-        if let Some(device) = device {
-            let battery = device.get_battery_charge().unwrap();
-            let percentage = (battery as f32 / 255.0 * 100.0).round() as u8;
-            let charging = device.get_charging_status().unwrap() == 1;
+        let battery = device.get_battery_charge().unwrap();
+        let percentage = (battery as f32 / 255.0 * 100.0).round() as u8;
+        let charging = device.get_charging_status().unwrap() == 1;
 
-            return Some(BatteryStatus {
-                product_id,
-                name: device.name.clone(),
-                percentage,
-                charging,
-            });
-        }
-
-        None
+        Ok(Some(BatteryStatus {
+            product_id,
+            name: device.name.clone(),
+            percentage,
+            charging,
+        }))
     }
 
     pub fn last_status(product_id: u16) -> anyhow::Result<Option<u8>> {
@@ -161,7 +156,7 @@ impl BatteryData {
                         // println!("  - raw duration: {:?}", duration);
                         let idle_time_seconds = idle_intervals.iter().sum::<i64>();
                         // println!("  - idle time: {:?}", idle_time_seconds);
-                        let idle_time = chrono::Duration::seconds(idle_time_seconds as i64);
+                        let idle_time = chrono::Duration::seconds(idle_time_seconds);
                         // println!("  - idle time (duration): {:?}", idle_time);
                         let duration = duration - idle_time;
                         // println!("  - duration: {:?}", duration);
@@ -174,27 +169,25 @@ impl BatteryData {
                     last_entry = Some(entry);
                     idle_intervals = vec![];
                 }
-            } else {
-                if let Some(last_entry) = last_line_entry {
-                    // gets the duration between current and last entries
-                    let idle_duration = entry.timestamp() - last_entry.timestamp();
-                    // println!(
-                    //     "  [!] adding idle time between {} ({:?}) and {} ({:?}) = {:?}",
-                    //     entry.percentage,
-                    //     entry.timestamp(),
-                    //     last_entry.percentage,
-                    //     last_entry.timestamp(),
-                    //     idle_duration
-                    // );
-                    idle_intervals.push(idle_duration.num_seconds() as i64);
-                }
+            } else if let Some(last_entry) = last_line_entry {
+                // gets the duration between current and last entries
+                let idle_duration = entry.timestamp() - last_entry.timestamp();
+                // println!(
+                //     "  [!] adding idle time between {} ({:?}) and {} ({:?}) = {:?}",
+                //     entry.percentage,
+                //     entry.timestamp(),
+                //     last_entry.percentage,
+                //     last_entry.timestamp(),
+                //     idle_duration
+                // );
+                idle_intervals.push(idle_duration.num_seconds());
             }
             last_line_entry = Some(entry);
         }
         let total_time = measurements.iter().map(|d| d.num_seconds()).sum::<i64>();
         // TODO: Make this an Option and return None when there are no measurements to assure we're
         // telling the user it's to early to have an idea on how much the battery will last
-        if measurements.len() < 1 {
+        if measurements.is_empty() {
             return None;
         }
         Some(total_time / measurements.len() as i64)

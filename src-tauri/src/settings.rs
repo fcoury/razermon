@@ -5,7 +5,7 @@ pub fn get(key: &str) -> anyhow::Result<Option<String>> {
     let mut stmt = db
         .conn
         .prepare("SELECT value FROM settings WHERE key = ?1")?;
-    let mut rows = stmt.query(&[key])?;
+    let mut rows = stmt.query([key])?;
     if let Some(row) = rows.next()? {
         return Ok(Some(row.get(0)?));
     }

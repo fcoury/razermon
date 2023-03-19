@@ -13,7 +13,7 @@ pub trait HumanDuration {
 impl HumanDuration for Duration {
     type Displayer = HumanDurationDisplay;
     fn as_human(&self) -> Self::Displayer {
-        HumanDurationDisplay(self.clone())
+        HumanDurationDisplay(*self)
     }
 }
 
@@ -38,14 +38,14 @@ impl fmt::Display for HumanDurationDisplay {
         }
         if hours > 0 {
             if !res.is_empty() {
-                res.push_str(" ");
+                res.push(' ');
             }
             res.push_str(&format!("{}h", hours));
         }
         // only show minutes if days are not shown
         if minutes > 0 && days < 1 {
             if !res.is_empty() && hours < 1 {
-                res.push_str(" ");
+                res.push(' ');
             }
             if hours > 0 {
                 res.push_str(&format!("{:02}m", minutes));
