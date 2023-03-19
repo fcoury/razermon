@@ -1,6 +1,7 @@
 #[cfg(any(target_os = "macos"))]
 use crate::battery::BatteryStatus;
 use battery::BatteryData;
+use razer_driver_rs::scan_for_devices;
 use std::{thread, time::Duration};
 use tauri::{
     api::notification::Notification, AppHandle, CustomMenuItem, Manager, RunEvent, SystemTray,
@@ -36,10 +37,15 @@ fn main() {
                     "battery" => {
                         let product_id = settings::get("product_id").unwrap().unwrap();
                         let status = BatteryStatus::get(product_id.parse().unwrap());
-                        if let Some(status) = status {
+                        if let Ok(Some(status)) = status {
                             app.tray_handle()
                                 .get_item("battery")
                                 .set_title(status.to_string())
+                                .unwrap();
+                        } else {
+                            app.tray_handle()
+                                .get_item("battery")
+                                .set_title("No battery data".to_string())
                                 .unwrap();
                         }
                     }
@@ -69,16 +75,21 @@ fn main() {
                     }
                     str => {
                         if str.starts_with("device_") {
-                            if let Some(devices) = razermacos::RazerDevices::new().all() {
+                            let res = scan_for_devices(None).unwrap();
+                            let devices = res.devices;
+                            if !devices.is_empty() {
                                 let str_id = str.replace("device_", "");
-                                settings::set("device", &str_id).unwrap();
+                                settings::set("product_id", &str_id).unwrap();
                                 let id: u16 = str_id.parse().unwrap();
                                 app.tray_handle();
                                 item_handle.set_selected(true).unwrap();
-                                for device in devices {
-                                    if device.product_id() != id {
+                                for device_spec in devices {
+                                    if device_spec.device.product_id() != id {
                                         app.tray_handle()
-                                            .get_item(&format!("device_{}", device.product_id()))
+                                            .get_item(&format!(
+                                                "device_{}",
+                                                device_spec.device.product_id()
+                                            ))
                                             .set_selected(false)
                                             .unwrap();
                                     }
@@ -90,12 +101,11 @@ fn main() {
             }
             _ => {}
         })
-        .on_window_event(|event| match event.event() {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
+        .on_window_event(|event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event.event() {
                 event.window().hide().unwrap();
                 api.prevent_close();
             }
-            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             charge_history,
@@ -109,7 +119,7 @@ fn main() {
     // #[cfg(target_os = "macos")]
     // app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-    let handle = app.handle().clone();
+    let handle = app.handle();
     if let Some(product_id) = product_id {
         start_updates(handle, product_id);
     }
@@ -128,7 +138,7 @@ fn selected_product_id() -> Option<u16> {
 
 #[tauri::command]
 fn device_status(product_id: u16) -> Option<BatteryStatus> {
-    BatteryStatus::get(product_id)
+    BatteryStatus::get(product_id).unwrap()
 }
 
 #[tauri::command]
@@ -151,16 +161,15 @@ fn battery_stats(product_id: u16) -> Result<Option<(i64, Option<String>)>, Strin
 }
 
 fn status(product_id: Option<u16>) -> String {
-    let status = if let Some(product_id) = product_id {
-        if let Some(status) = BatteryStatus::get(product_id) {
+    if let Some(product_id) = product_id {
+        if let Ok(Some(status)) = BatteryStatus::get(product_id) {
             status.to_string()
         } else {
             "".to_string()
         }
     } else {
         "".to_string()
-    };
-    status
+    }
 }
 
 fn load_product_id() -> Option<u16> {
@@ -168,17 +177,16 @@ fn load_product_id() -> Option<u16> {
     let product_id = match product_id {
         Some(product_id) => Some(product_id.parse().unwrap()),
         None => {
-            if let Some(devices) = razermacos::RazerDevices::new().all() {
-                let product_id = devices
-                    .iter()
-                    .find(|d| d.has_battery())
-                    .unwrap()
-                    .product_id();
-                settings::set("product_id", &product_id.to_string()).unwrap();
-                Some(product_id)
-            } else {
-                None
+            let res = scan_for_devices(None).unwrap();
+            if res.devices.is_empty() {
+                return None;
             }
+            let Some(device) = res.devices.get(0) else {
+                return None;
+            };
+            let product_id = device.device.product_id();
+            settings::set("product_id", &product_id.to_string()).unwrap();
+            Some(product_id)
         }
     };
     product_id
@@ -189,7 +197,7 @@ fn start_updates(handle: AppHandle, product_id: u16) {
     let mut notified = false;
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));
-        let status = BatteryStatus::get(product_id);
+        let status = BatteryStatus::get(product_id).unwrap();
         if let Some(status) = status {
             handle.tray_handle().set_title(&status.to_string()).unwrap();
             if status.percentage != curr_percentage {
@@ -234,12 +242,9 @@ fn start_updates(handle: AppHandle, product_id: u16) {
 
 fn remaining(product_id: Option<u16>) -> Option<String> {
     if let Some(product_id) = product_id {
-        if let Some(status) = BatteryStatus::get(product_id) {
+        if let Some(status) = BatteryStatus::get(product_id).unwrap() {
             if let Ok(remaining) = status.fmt_remaining() {
-                return match remaining {
-                    Some(r) => Some(format!("{} remaining", r)),
-                    None => None,
-                };
+                return remaining.map(|r| format!("{} remaining", r));
             }
         }
     }
@@ -261,29 +266,30 @@ fn tray_menu(product_id: Option<u16>) -> SystemTrayMenu {
         .add_native_item(SystemTrayMenuItem::Separator);
 
     if let Some(product_id) = product_id {
-        menu = match razermacos::RazerDevices::new().all() {
-            Some(devices) => {
-                menu = menu
-                    .add_item(CustomMenuItem::new("usage", "Usage Chart..."))
-                    .add_item(CustomMenuItem::new("notify", "Test Notification"))
-                    .add_native_item(SystemTrayMenuItem::Separator);
+        let res = scan_for_devices(None).unwrap();
+        let devices = res.devices;
+        if devices.is_empty() {
+            return no_devices_menu(&menu);
+        }
+        menu = menu
+            .add_item(CustomMenuItem::new("usage", "Usage Chart..."))
+            .add_item(CustomMenuItem::new("notify", "Test Notification"))
+            .add_native_item(SystemTrayMenuItem::Separator);
 
-                for device in devices {
-                    let id = format!("device_{}", device.product_id());
-                    let mut item = CustomMenuItem::new(id, &device.name);
-                    item.selected = product_id == device.product_id();
-                    item.enabled = device.has_battery();
-                    menu = menu.add_item(item);
-                }
+        for device_spec in devices {
+            let id = format!("device_{}", device_spec.device.product_id());
+            let mut item = CustomMenuItem::new(id, &device_spec.name);
+            item.selected = product_id == device_spec.device.product_id();
+            // item.enabled = device.has_battery(); TODO
+            menu = menu.add_item(item);
+        }
 
-                menu.add_native_item(SystemTrayMenuItem::Separator)
-                    .add_item(CustomMenuItem::new("devtools", "Open DevTools"))
-            }
-            None => no_devices_menu(&menu),
-        };
+        menu = menu
+            .add_native_item(SystemTrayMenuItem::Separator)
+            .add_item(CustomMenuItem::new("devtools", "Open DevTools"));
     } else {
         menu = no_devices_menu(&menu);
-    }
+    };
 
     menu.add_native_item(SystemTrayMenuItem::Separator)
         .add_item(CustomMenuItem::new("quit", "Quit"))
