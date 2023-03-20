@@ -94,6 +94,7 @@ fn main() {
                                             .unwrap();
                                     }
                                 }
+                                update_tray_display(app, id);
                             }
                         }
                     }
@@ -192,49 +193,80 @@ fn load_product_id() -> Option<u16> {
     product_id
 }
 
-fn start_updates(handle: AppHandle, product_id: u16) {
+fn start_updates(handle: AppHandle, mut product_id: u16) {
     let mut curr_percentage = BatteryStatus::last_status(product_id).unwrap().unwrap_or(0);
     let mut notified = false;
+    let mut curr_product_id = product_id;
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));
-        let status = BatteryStatus::get(product_id).unwrap();
-        if let Some(status) = status {
-            handle.tray_handle().set_title(&status.to_string()).unwrap();
-            if status.percentage != curr_percentage {
-                let res = status.save();
-                if res.is_err() {
-                    eprintln!("WARN: Couldn't save battery status");
-                }
 
-                // notifies again at 5%
-                if status.percentage < 5 {
-                    notified = false;
-                }
+        let res = match scan_for_devices(None) {
+            Ok(result) => result,
+            Err(err) => {
+                eprintln!("Error scanning for devices: {}", err);
+                continue;
+            }
+        };
+        let devices = res.devices;
+        let device_connected = devices.iter().any(|d| d.device.product_id() == product_id);
 
-                // if battery is below threshold and not already notified
-                if status.percentage < 10 && status.percentage != 0 && !notified {
-                    Notification::new("org.fcoury.razermon")
-                        .icon("icons/128x128.png")
-                        .title("Battery warning")
-                        .body("Your battery is running low.")
-                        .show()
-                        .unwrap();
-                    notified = true;
-                }
+        if !device_connected {
+            let new_device = devices.get(0);
+            println!("Device connected: {:?}", new_device);
+            if let Some(new_device) = new_device {
+                product_id = new_device.device.product_id();
+                settings::set("product_id", &product_id.to_string()).unwrap();
+                update_tray_display(&handle, product_id);
+            } else {
+                // No devices found, update the tray display accordingly
+                handle.tray_handle().set_title("No devices found").unwrap();
+                handle
+                    .tray_handle()
+                    .get_item("remaining")
+                    .set_title("No devices found")
+                    .unwrap();
+                continue;
+            }
+        }
 
-                if notified && status.percentage >= 10 {
-                    notified = false;
-                }
+        match BatteryStatus::get_from_devices(&devices, product_id) {
+            Ok(Some(status)) => {
+                if status.percentage != curr_percentage || curr_product_id != product_id {
+                    curr_percentage = status.percentage;
+                    curr_product_id = product_id;
+                    handle.tray_handle().set_title(&status.to_string()).unwrap();
+                    let res = status.save();
+                    if res.is_err() {
+                        eprintln!("WARN: Couldn't save battery status");
+                    }
 
-                if let Some(remaining) = remaining(Some(product_id)) {
-                    handle
-                        .tray_handle()
-                        .get_item("remaining")
-                        .set_title(&remaining)
-                        .unwrap();
-                }
+                    // notifies again at 5%
+                    if status.percentage < 5 {
+                        notified = false;
+                    }
 
-                curr_percentage = status.percentage;
+                    // if battery is below threshold and not already notified
+                    if status.percentage < 10 && status.percentage != 0 && !notified {
+                        Notification::new("org.fcoury.razermon")
+                            .icon("icons/128x128.png")
+                            .title("Battery warning")
+                            .body("Your battery is running low.")
+                            .show()
+                            .unwrap();
+                        notified = true;
+                    }
+                }
+            }
+            Ok(None) => {
+                handle.tray_handle().set_title("No devices found").unwrap();
+                handle
+                    .tray_handle()
+                    .get_item("remaining")
+                    .set_title("No devices found")
+                    .unwrap();
+            }
+            Err(err) => {
+                eprintln!("Error getting battery status: {}", err);
             }
         }
     });
@@ -242,9 +274,15 @@ fn start_updates(handle: AppHandle, product_id: u16) {
 
 fn remaining(product_id: Option<u16>) -> Option<String> {
     if let Some(product_id) = product_id {
-        if let Some(status) = BatteryStatus::get(product_id).unwrap() {
-            if let Ok(remaining) = status.fmt_remaining() {
-                return remaining.map(|r| format!("{} remaining", r));
+        match BatteryStatus::get(product_id) {
+            Ok(Some(status)) => {
+                if let Ok(remaining) = status.fmt_remaining() {
+                    return remaining.map(|r| format!("{} remaining", r));
+                }
+            }
+            Ok(None) => {}
+            Err(err) => {
+                eprintln!("Error getting battery status: {}", err);
             }
         }
     }
@@ -300,4 +338,30 @@ fn no_devices_menu(menu: &SystemTrayMenu) -> SystemTrayMenu {
     let mut item = CustomMenuItem::new("no_devices", "No devices found");
     item.enabled = false;
     menu.add_item(item)
+}
+
+fn update_tray_display(handle: &AppHandle, product_id: u16) {
+    match BatteryStatus::get(product_id) {
+        Ok(Some(status)) => {
+            handle.tray_handle().set_title(&status.to_string()).unwrap();
+        }
+        Ok(None) => {
+            handle.tray_handle().set_title("No battery data").unwrap();
+        }
+        Err(err) => {
+            eprintln!("Error getting battery status: {}", err);
+            handle
+                .tray_handle()
+                .set_title("Error getting battery status")
+                .unwrap();
+        }
+    }
+
+    if let Some(remaining) = remaining(Some(product_id)) {
+        handle
+            .tray_handle()
+            .get_item("remaining")
+            .set_title(remaining)
+            .unwrap();
+    }
 }
