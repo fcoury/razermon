@@ -2339,6 +2339,7 @@ dependencies = [
 [[package]]
 name = "razer_driver_rs"
 version = "0.1.0"
+source = "git+https://github.com/fcoury/razer_driver_rs.git?branch=main#5ae2cc4e8c205d84595096d367e03e121f2e1a59"
 dependencies = [
  "associated",
  "bytes",
