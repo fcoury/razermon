@@ -2,7 +2,10 @@ use std::fmt;
 
 use crate::human_display::HumanDuration;
 use chrono::{Duration, NaiveDateTime};
-use razer_driver_rs::scan_for_devices;
+use razer_driver_rs::{
+    razer_device::{RazerDevice, RazerDeviceType},
+    scan_for_devices,
+};
 use rusqlite::OptionalExtension;
 
 use crate::database;
@@ -28,6 +31,25 @@ impl BatteryStatus {
 
         Ok(Some(BatteryStatus {
             product_id,
+            name: device.name.clone(),
+            percentage,
+            charging,
+        }))
+    }
+
+    pub fn get_from_devices(
+        devices: &Vec<RazerDevice<RazerDeviceType>>,
+        product_id: u16,
+    ) -> anyhow::Result<Option<Self>> {
+        let Some(device) = devices.into_iter().find(|d| d.device.product_id() == product_id) else {
+            return Ok(None);
+        };
+        let battery = device.get_battery_charge().unwrap();
+        let percentage = (battery as f32 / 255.0 * 100.0).round() as u8;
+        let charging = device.get_charging_status().unwrap() == 1;
+
+        Ok(Some(BatteryStatus {
+            product_id: device.device.product_id(),
             name: device.name.clone(),
             percentage,
             charging,
