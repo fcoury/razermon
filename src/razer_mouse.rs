@@ -12,6 +12,8 @@ use strum::{Display, FromRepr};
 #[associated(Type = RazerDeviceConnectInfo)]
 pub enum RazerMouseKind {
     #[assoc_const(RazerDeviceConnectInfo {interface_number: Some(0), usage: Some(2), usage_page: Some(1)})]
+    MouseDockPro = 0x00a4,
+    #[assoc_const(RazerDeviceConnectInfo {interface_number: Some(0), usage: Some(2), usage_page: Some(1)})]
     BasiliskV3ProWireless = 0x00ab,
     #[assoc_const(RazerDeviceConnectInfo {interface_number: Some(0), usage: Some(2), usage_page: Some(1)})]
     BasiliskV3ProWirelessDongle = 0x00aa,
@@ -22,9 +24,10 @@ pub enum RazerMouseKind {
 impl RazerDeviceKind for RazerMouseKind {
     fn get_transaction_device(&self) -> RazerTransactionDevice {
         match self {
-            RazerMouseKind::BasiliskV3ProWireless => RazerTransactionDevice::Seven,
-            RazerMouseKind::BasiliskV3ProWirelessDongle => RazerTransactionDevice::Seven,
-            RazerMouseKind::ViperUltimateWireless => RazerTransactionDevice::Seven,
+            RazerMouseKind::MouseDockPro => RazerTransactionDevice::Default,
+            RazerMouseKind::BasiliskV3ProWireless => RazerTransactionDevice::Default,
+            RazerMouseKind::BasiliskV3ProWirelessDongle => RazerTransactionDevice::Default,
+            RazerMouseKind::ViperUltimateWireless => RazerTransactionDevice::Default,
         }
     }
 }
