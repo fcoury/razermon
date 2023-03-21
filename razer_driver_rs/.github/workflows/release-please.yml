@@ -1,0 +1,26 @@
+on:
+  push:
+    branches:
+      - main
+name: release-please
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: GoogleCloudPlatform/release-please-action@v2
+        id: release
+        with:
+          release-type: rust
+          package-name: razer_driver_rs
+      - uses: actions/checkout@v2
+        if: ${{ steps.release.outputs.release_created }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+        if: ${{ steps.release.outputs.release_created }}
+      - uses: actions-rs/cargo@v1
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        with:
+          command: publish
+        if: ${{ steps.release.outputs.release_created }}
